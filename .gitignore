@@ -1,0 +1,11 @@
+target/
+*.log
+.env
+.env.*
+!.env.example
+application-local.yml
+application-*.local.yml
+docker-compose.local.yml
+.idea/
+*.iml
+.vscode/

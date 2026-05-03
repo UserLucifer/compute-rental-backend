@@ -1,0 +1,20 @@
+logging:
+  level:
+    root: INFO
+    com.compute.rental: INFO
+    com.baomidou.mybatisplus: WARN
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+knife4j:
+  enable: false
+
+app:
+  production:
+    enforce: true
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:}

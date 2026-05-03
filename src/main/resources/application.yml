@@ -1,0 +1,110 @@
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+    com.compute.rental: INFO
+    com.baomidou.mybatisplus: INFO
+
+spring:
+  config:
+    import: optional:file:./application-local.yml
+  application:
+    name: compute-rental-backend
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:mysql://localhost:3306/compute_rental?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+    hikari:
+      pool-name: ComputeRentalHikariPool
+      maximum-pool-size: 20
+      minimum-idle: 5
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:}
+    password: ${RABBITMQ_PASSWORD:}
+    virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 20
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: false
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.compute.rental.modules
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+app:
+  time-zone: Asia/Shanghai
+  production:
+    enforce: ${APP_PRODUCTION_ENFORCE:false}
+    allow-local-infrastructure: ${APP_PRODUCTION_ALLOW_LOCAL_INFRASTRUCTURE:false}
+    allow-empty-redis-password: ${APP_PRODUCTION_ALLOW_EMPTY_REDIS_PASSWORD:false}
+    allow-rabbit-guest-user: ${APP_PRODUCTION_ALLOW_RABBIT_GUEST_USER:false}
+    allow-wildcard-websocket-origins: ${APP_PRODUCTION_ALLOW_WILDCARD_WEBSOCKET_ORIGINS:false}
+    allow-api-docs: ${APP_PRODUCTION_ALLOW_API_DOCS:false}
+  jwt:
+    issuer: compute-rental
+    secret: ${JWT_SECRET:}
+    access-token-ttl: 24h
+  api-token:
+    encryption-secret: ${API_TOKEN_ENCRYPTION_SECRET:}
+    base-url: ${API_TOKEN_BASE_URL:https://api.example.invalid/v1}
+  auth:
+    email-code-ttl: 5m
+    email-code-length: 6
+    email-code-rate-limit-per-minute: 5
+    email-from: ${MAIL_FROM:no-reply@example.invalid}
+    email-subject: Compute Rental login verification code
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:3000}
+  scheduler:
+    daily-profit-cron: 0 5 0 * * *
+    order-expire-settle-cron: 0 10 0 * * *
+    auto-pause-cron: 0 */5 * * * *
+    activation-timeout-cancel-cron: 0 */10 * * * *
