@@ -6,6 +6,10 @@ import java.time.LocalDateTime;
 public record DocArticleResponse(
         @Schema(description = "Article internal ID")
         Long id,
+        @Schema(description = "Document language: zh-CN, en-US")
+        String language,
+        @Schema(description = "Document section: guide, integration, faq, support")
+        String section,
         @Schema(description = "Category internal ID")
         Long categoryId,
         @Schema(description = "Category name")
@@ -20,6 +24,8 @@ public record DocArticleResponse(
         String contentMarkdown,
         @Schema(description = "Publish status: 0 draft, 1 published, 2 offline")
         Integer publishStatus,
+        @Schema(description = "Section home flag: 1 home, 0 normal")
+        Integer isSectionHome,
         @Schema(description = "Published time")
         LocalDateTime publishedAt,
         @Schema(description = "Sort number")

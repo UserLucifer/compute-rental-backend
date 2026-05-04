@@ -43,10 +43,12 @@ public class AdminDocController {
     public ApiResponse<PageResult<DocCategoryResponse>> categories(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String language,
+            @RequestParam(required = false) String section,
             @RequestParam(required = false, name = "parent_id") Long parentId,
             @RequestParam(required = false) Integer status
     ) {
-        return ApiResponse.success(docService.adminCategories(pageNo, pageSize, parentId, status));
+        return ApiResponse.success(docService.adminCategories(pageNo, pageSize, language, section, parentId, status));
     }
 
     @Operation(summary = "Create doc category")
@@ -99,16 +101,19 @@ public class AdminDocController {
     public ApiResponse<PageResult<DocArticleResponse>> articles(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String language,
+            @RequestParam(required = false) String section,
             @RequestParam(required = false, name = "category_id") Long categoryId,
             @RequestParam(required = false, name = "publish_status") Integer publishStatus,
+            @RequestParam(required = false, name = "is_section_home") Integer isSectionHome,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false, name = "start_time")
             @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false, name = "end_time")
             @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime
     ) {
-        return ApiResponse.success(docService.adminArticles(pageNo, pageSize, categoryId, publishStatus,
-                keyword, startTime, endTime));
+        return ApiResponse.success(docService.adminArticles(pageNo, pageSize, language, section, categoryId, publishStatus,
+                isSectionHome, keyword, startTime, endTime));
     }
 
     @Operation(summary = "Admin doc article detail")

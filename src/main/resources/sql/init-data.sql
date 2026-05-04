@@ -1,4 +1,4 @@
--- Consolidated initialization data for compute rental backend.
+﻿-- Consolidated initialization data for compute rental backend.
 -- Execute after schema.sql. Review default admin credentials before production use.
 SET NAMES utf8mb4;
 
@@ -3424,3 +3424,832 @@ JOIN `blog_tag` t ON (
   (p.`title` = 'GPU 任务稳定运行指南：驱动、CUDA、显存和日志怎么排查' AND t.`tag_name` IN ('模型部署', 'AI训练', 'AI推理')) OR
   (p.`title` = '从模型训练到推理服务：算力成本优化的 6 个关键动作' AND t.`tag_name` IN ('成本优化', '模型部署', '算力租赁'))
 );
+-- Documentation center seed data.
+INSERT INTO `doc_category` (`parent_id`, `language`, `section`, `category_code`, `category_name`, `icon`, `sort_no`, `status`) VALUES
+(NULL, 'zh-CN', 'guide', 'guides', '使用指南', 'book-open', 1, 1),
+(NULL, 'zh-CN', 'guide', 'compute-rental', '算力租赁', 'gpu', 2, 1),
+(NULL, 'zh-CN', 'guide', 'billing-wallet', '充值与钱包', 'wallet', 3, 1),
+(NULL, 'zh-CN', 'integration', 'api-deployment', '集成部署', 'server', 4, 1),
+(NULL, 'zh-CN', 'faq', 'support', '常见问题', 'circle-help', 5, 1)
+ON DUPLICATE KEY UPDATE
+  `parent_id` = VALUES(`parent_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `category_name` = VALUES(`category_name`),
+  `icon` = VALUES(`icon`),
+  `sort_no` = VALUES(`sort_no`),
+  `status` = VALUES(`status`);
+
+INSERT INTO `doc_category` (`parent_id`, `language`, `section`, `category_code`, `category_name`, `icon`, `sort_no`, `status`)
+SELECT p.`id`, seed.`language`, seed.`section`, seed.`category_code`, seed.`category_name`, seed.`icon`, seed.`sort_no`, seed.`status`
+FROM (
+  SELECT 'guides' AS `parent_code`, 'zh-CN' AS `language`, 'guide' AS `section`, 'getting-started' AS `category_code`, '快速开始' AS `category_name`, 'rocket' AS `icon`, 1 AS `sort_no`, 1 AS `status`
+  UNION ALL SELECT 'compute-rental', 'zh-CN', 'guide', 'machine-selection', '机器选型', 'cpu', 1, 1
+  UNION ALL SELECT 'compute-rental', 'zh-CN', 'guide', 'rental-orders', '租赁订单', 'receipt-text', 2, 1
+  UNION ALL SELECT 'billing-wallet', 'zh-CN', 'guide', 'recharge-wallet', '充值与钱包', 'credit-card', 1, 1
+  UNION ALL SELECT 'billing-wallet', 'zh-CN', 'guide', 'profit-settlement', '收益与结算', 'chart-line', 2, 1
+  UNION ALL SELECT 'api-deployment', 'zh-CN', 'integration', 'api-basics', '模型 API', 'key-round', 1, 1
+  UNION ALL SELECT 'support', 'zh-CN', 'faq', 'faq', '常见问题', 'messages-square', 1, 1
+) seed
+JOIN `doc_category` p ON p.`category_code` = seed.`parent_code` AND p.`language` = seed.`language`
+ON DUPLICATE KEY UPDATE
+  `parent_id` = VALUES(`parent_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `category_name` = VALUES(`category_name`),
+  `icon` = VALUES(`icon`),
+  `sort_no` = VALUES(`sort_no`),
+  `status` = VALUES(`status`);
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       '文档中心概览',
+       'overview',
+       '了解文档中心适合解决什么问题，以及如何按分类阅读算力租赁平台的使用说明。',
+       CONCAT(
+         '# 文档中心概览', CHAR(10), CHAR(10),
+         '文档中心用于集中展示算力租赁平台的使用说明。这里的内容面向普通用户和后台运营人员，重点解释注册登录、充值、选择机器、创建订单、部署 API、查看收益和处理常见问题。', CHAR(10), CHAR(10),
+         '## 如何阅读', CHAR(10), CHAR(10),
+         '左侧分类按照实际使用流程组织。新用户可以先阅读快速开始，再进入算力租赁、充值与钱包、API 与部署等章节。如果只是遇到具体问题，可以直接使用搜索功能查找关键词。', CHAR(10), CHAR(10),
+         '## 文档状态', CHAR(10), CHAR(10),
+         '只有已发布的文档会出现在前台。草稿和下线文档只在后台管理端可见，方便运营人员先编辑再发布。', CHAR(10), CHAR(10),
+         '## 使用建议', CHAR(10), CHAR(10),
+         '在执行资金、租赁、API 部署等操作前，建议先阅读对应章节。涉及金额、订单状态、收益结算和提币规则时，以平台页面实际展示和后台审核结果为准。'
+       ),
+       1, 1, '2026-05-04 09:00:00', 1, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'guides'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+-- English documentation center seed data.
+INSERT INTO `doc_category` (`parent_id`, `language`, `section`, `category_code`, `category_name`, `icon`, `sort_no`, `status`) VALUES
+(NULL, 'en-US', 'guide', 'guides', 'Guides', 'book-open', 1, 1),
+(NULL, 'en-US', 'guide', 'compute-rental', 'Compute Rental', 'gpu', 2, 1),
+(NULL, 'en-US', 'guide', 'billing-wallet', 'Billing & Wallet', 'wallet', 3, 1),
+(NULL, 'en-US', 'integration', 'api-deployment', 'API Integration', 'server', 4, 1),
+(NULL, 'en-US', 'faq', 'support', 'FAQ', 'circle-help', 5, 1)
+ON DUPLICATE KEY UPDATE
+  `parent_id` = VALUES(`parent_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `category_name` = VALUES(`category_name`),
+  `icon` = VALUES(`icon`),
+  `sort_no` = VALUES(`sort_no`),
+  `status` = VALUES(`status`);
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Documentation Center Overview',
+       'overview',
+       'Learn what the documentation center covers and how to browse compute rental guides by category.',
+       CONCAT(
+         '# Documentation Center Overview', CHAR(10), CHAR(10),
+         'The documentation center brings together the operating guides for the compute rental platform. It covers account access, wallet funding, machine selection, rental orders, API deployment, profit records, and common troubleshooting steps.', CHAR(10), CHAR(10),
+         '## How to read', CHAR(10), CHAR(10),
+         'Start with the getting started guides if you are new to the platform. Then move through compute rental, billing and wallet, API integration, and FAQ topics based on the task you are trying to complete.', CHAR(10), CHAR(10),
+         '## Document status', CHAR(10), CHAR(10),
+         'Only published documents are visible in the public help center. Draft and offline documents remain available in the admin console for editing and review.', CHAR(10), CHAR(10),
+         '## Recommended workflow', CHAR(10), CHAR(10),
+         'Before making payment, renting machines, or deploying APIs, read the related section first. For balances, order status, settlements, and withdrawals, the final result should follow the platform page and admin review records.'
+       ),
+       1, 1, '2026-05-04 10:00:00', 1, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'guides'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Account Registration and Login',
+       'account-signup-login',
+       'How to create an account, verify email, sign in, and reset your password.',
+       CONCAT(
+         '# Account Registration and Login', CHAR(10), CHAR(10),
+         'You need an account before using wallet, orders, API tokens, profit records, and referral features. Use an email address that can receive verification codes reliably.', CHAR(10), CHAR(10),
+         '## Sign up', CHAR(10), CHAR(10),
+         'Enter your email, password, and any required invitation information. The system sends a verification code by email. If the code expires, request a new one before continuing.', CHAR(10), CHAR(10),
+         '## Sign in', CHAR(10), CHAR(10),
+         'After login, the frontend stores an access token and sends it when calling wallet, order, and API management endpoints. When the token expires, sign in again.', CHAR(10), CHAR(10),
+         '## Reset password', CHAR(10), CHAR(10),
+         'If you forget your password, use email verification to reset it. The old password becomes invalid immediately after the reset.'
+       ),
+       1, 0, '2026-05-04 10:05:00', 2, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'guides'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Choose the Right GPU Machine',
+       'choose-gpu-machine',
+       'How to choose a GPU machine by memory, performance, region, price, and workload type.',
+       CONCAT(
+         '# Choose the Right GPU Machine', CHAR(10), CHAR(10),
+         'Do not choose a machine by GPU name alone. A good rental decision should consider GPU memory, compute performance, region, stock, rental period, and the actual workload.', CHAR(10), CHAR(10),
+         '## Match the workload', CHAR(10), CHAR(10),
+         'Inference workloads usually care about latency, concurrency, and stable memory usage. Training and fine-tuning care more about memory size, data throughput, checkpoint writing, and long-running stability.', CHAR(10), CHAR(10),
+         '## Check memory first', CHAR(10), CHAR(10),
+         'Insufficient GPU memory can cause out-of-memory errors or force a smaller batch size. For a new task, start with a short rental and measure real memory usage before scaling up.', CHAR(10), CHAR(10),
+         '## Pick a rental period', CHAR(10), CHAR(10),
+         'Short periods are better for validation. Longer periods are suitable for stable tasks after the model, data, and scripts have already been verified.'
+       ),
+       1, 0, '2026-05-04 10:10:00', 3, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'compute-rental'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Deposit USDT and Confirm Arrival',
+       'recharge-usdt',
+       'The USDT deposit flow, proof submission, admin review, and wallet balance update.',
+       CONCAT(
+         '# Deposit USDT and Confirm Arrival', CHAR(10), CHAR(10),
+         'Make sure your wallet balance is sufficient before renting machines. The platform uses USDT for the main billing and settlement flow.', CHAR(10), CHAR(10),
+         '## Create a deposit request', CHAR(10), CHAR(10),
+         'Choose a deposit channel, enter the amount, and transfer according to the displayed receiving information. After payment, submit the transaction hash or proof screenshot.', CHAR(10), CHAR(10),
+         '## Review and crediting', CHAR(10), CHAR(10),
+         'After admin approval, the amount is credited to your available wallet balance. If the request is rejected, check the review reason and submit again if needed.', CHAR(10), CHAR(10),
+         '## Important notes', CHAR(10), CHAR(10),
+         'Always confirm that the blockchain network and receiving address match. Sending funds through the wrong network may make recovery impossible.'
+       ),
+       1, 0, '2026-05-04 10:15:00', 4, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'billing-wallet'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Create a Compute Rental Order',
+       'create-rental-order',
+       'The full order flow from product selection and rental period to balance payment.',
+       CONCAT(
+         '# Create a Compute Rental Order', CHAR(10), CHAR(10),
+         'A compute rental order locks a selected GPU product and rental period. Before placing an order, confirm wallet balance, machine specification, region, stock, and workload requirements.', CHAR(10), CHAR(10),
+         '## Before ordering', CHAR(10), CHAR(10),
+         'Check GPU model, memory, price, available rental date, stock, and rental period. For training or deployment, prepare images, model files, datasets, and startup scripts in advance.', CHAR(10), CHAR(10),
+         '## Place the order', CHAR(10), CHAR(10),
+         'Choose a rental period on the product page and submit the order. The system calculates the payable amount based on product price and period.', CHAR(10), CHAR(10),
+         '## After payment', CHAR(10), CHAR(10),
+         'After successful payment, the order enters activation. Some products are activated automatically, while others may require manual processing.'
+       ),
+       1, 0, '2026-05-04 10:20:00', 5, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'compute-rental'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Order Status and Expiration Handling',
+       'order-status-expire',
+       'Understand pending payment, activation, running, expiration, cancellation, and early closure.',
+       CONCAT(
+         '# Order Status and Expiration Handling', CHAR(10), CHAR(10),
+         'Order status shows the current lifecycle of a rental. Understanding each status helps you decide whether to wait, pay, contact support, or renew.', CHAR(10), CHAR(10),
+         '## Common statuses', CHAR(10), CHAR(10),
+         'Pending payment means the order has not been paid. Activating means the platform is preparing the machine. Running means the rental is active. Expired means the rental period has ended.', CHAR(10), CHAR(10),
+         '## Expiration', CHAR(10), CHAR(10),
+         'When the rental reaches its end time, the platform processes expiration according to product and order rules. Back up important data before the rental expires.', CHAR(10), CHAR(10),
+         '## Early closure', CHAR(10), CHAR(10),
+         'If early closure is supported, check the cost and settlement rules first. Some scenarios may include penalties or manual review.'
+       ),
+       1, 0, '2026-05-04 10:25:00', 6, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'compute-rental'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Prepare for Model API Deployment',
+       'model-api-deploy-preparation',
+       'Checklist for images, model files, ports, environment variables, API tokens, and rate limits.',
+       CONCAT(
+         '# Prepare for Model API Deployment', CHAR(10), CHAR(10),
+         'Before exposing a model as an API, prepare the runtime environment, model files, startup command, port configuration, and access credentials.', CHAR(10), CHAR(10),
+         '## Runtime environment', CHAR(10), CHAR(10),
+         'Confirm the framework, CUDA version, dependency packages, model path, cache directory, and log path. A reusable image or startup script reduces deployment risk.', CHAR(10), CHAR(10),
+         '## Access control', CHAR(10), CHAR(10),
+         'Use API tokens to protect access. Keep tokens private, rotate them when needed, and disable unused tokens in the admin or user console.', CHAR(10), CHAR(10),
+         '## Monitoring', CHAR(10), CHAR(10),
+         'Record request volume, latency, error rate, GPU memory usage, and process status. Keep enough logs to troubleshoot failed requests.'
+       ),
+       1, 1, '2026-05-04 10:30:00', 7, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'api-deployment'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Manage API Tokens and Base URLs',
+       'api-token-usage',
+       'How to create, use, disable, and protect API tokens and model service URLs.',
+       CONCAT(
+         '# Manage API Tokens and Base URLs', CHAR(10), CHAR(10),
+         'API tokens are used to authenticate model service calls. The token represents access permissions, so it should be treated as sensitive information.', CHAR(10), CHAR(10),
+         '## Create a token', CHAR(10), CHAR(10),
+         'Create a token in the API management page and copy it once. Store it in environment variables or a secret manager instead of hard-coding it in source code.', CHAR(10), CHAR(10),
+         '## Call the API', CHAR(10), CHAR(10),
+         'Use the configured base URL and attach the token according to the API request format. Keep request time, parameters, error code, and response body when troubleshooting.', CHAR(10), CHAR(10),
+         '## Disable unused tokens', CHAR(10), CHAR(10),
+         'Disable tokens that are no longer used. If a token may have leaked, revoke it immediately and create a new one.'
+       ),
+       1, 0, '2026-05-04 10:35:00', 8, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'api-deployment'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Token Profit and Wallet Records',
+       'token-profit-wallet',
+       'How profit crediting, wallet transactions, frozen balance, and available balance relate to each other.',
+       CONCAT(
+         '# Token Profit and Wallet Records', CHAR(10), CHAR(10),
+         'Profits, deposits, withdrawals, rental payments, and refunds all create wallet transaction records. Reading these records helps you reconcile balance changes.', CHAR(10), CHAR(10),
+         '## Available and frozen balance', CHAR(10), CHAR(10),
+         'Available balance can be used for payments or withdrawal requests. Frozen balance usually means an amount is temporarily locked for an order, withdrawal, or review process.', CHAR(10), CHAR(10),
+         '## Profit crediting', CHAR(10), CHAR(10),
+         'Profit records are generated and settled according to platform rules. After settlement, the amount appears in wallet transactions.', CHAR(10), CHAR(10),
+         '## Reconciliation', CHAR(10), CHAR(10),
+         'When a balance looks unexpected, first check wallet transactions, then check the related order or profit record. Provide transaction number, business order number, and time when contacting support.'
+       ),
+       1, 0, '2026-05-04 10:40:00', 9, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'billing-wallet'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'FAQ and Troubleshooting Checklist',
+       'faq-troubleshooting',
+       'Common checks for login, deposits, orders, APIs, and profit records.',
+       CONCAT(
+         '# FAQ and Troubleshooting Checklist', CHAR(10), CHAR(10),
+         'If you run into a platform issue, start with this checklist. Most problems can be narrowed down by confirming account information, order number, transaction proof, API logs, and time range.', CHAR(10), CHAR(10),
+         '## Login issues', CHAR(10), CHAR(10),
+         'Confirm the email address, verification code expiration, and password. If login keeps failing, reset the password through email verification.', CHAR(10), CHAR(10),
+         '## Deposit not credited', CHAR(10), CHAR(10),
+         'Check the blockchain network, receiving address, transaction hash, and submitted amount. Complete proof helps admins review the request faster.', CHAR(10), CHAR(10),
+         '## Order not activated', CHAR(10), CHAR(10),
+         'Confirm the order is paid, stock is available, and whether manual processing is required. If it takes too long, provide the order number to support.', CHAR(10), CHAR(10),
+         '## API call failed', CHAR(10), CHAR(10),
+         'Check token validity, base URL, request parameters, and service status. Keep request time, error code, and response content for troubleshooting.'
+       ),
+       1, 1, '2026-05-04 10:45:00', 10, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'support'
+  AND c.`language` = 'en-US'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+-- Flatten documentation categories for the public help-center UI.
+UPDATE `doc_category`
+SET `parent_id` = NULL,
+    `section` = CASE `category_code`
+      WHEN 'guides' THEN 'guide'
+      WHEN 'compute-rental' THEN 'guide'
+      WHEN 'billing-wallet' THEN 'guide'
+      WHEN 'api-deployment' THEN 'integration'
+      WHEN 'support' THEN 'faq'
+      ELSE `section`
+    END,
+    `category_name` = CASE `category_code`
+      WHEN 'guides' THEN '使用指南'
+      WHEN 'compute-rental' THEN '算力租赁'
+      WHEN 'billing-wallet' THEN '充值与钱包'
+      WHEN 'api-deployment' THEN '集成部署'
+      WHEN 'support' THEN '常见问题'
+      ELSE `category_name`
+    END,
+    `sort_no` = CASE `category_code`
+      WHEN 'guides' THEN 1
+      WHEN 'compute-rental' THEN 2
+      WHEN 'billing-wallet' THEN 3
+      WHEN 'api-deployment' THEN 4
+      WHEN 'support' THEN 5
+      ELSE `sort_no`
+    END,
+    `status` = 1,
+    `updated_at` = NOW()
+WHERE `category_code` IN ('guides', 'compute-rental', 'billing-wallet', 'api-deployment', 'support')
+  AND `language` = 'zh-CN';
+
+UPDATE `doc_article` a
+JOIN `doc_category` c ON c.`id` = a.`category_id`
+JOIN `doc_category` p ON p.`language` = c.`language` AND p.`category_code` = CASE c.`category_code`
+  WHEN 'getting-started' THEN 'guides'
+  WHEN 'machine-selection' THEN 'compute-rental'
+  WHEN 'rental-orders' THEN 'compute-rental'
+  WHEN 'recharge-wallet' THEN 'billing-wallet'
+  WHEN 'profit-settlement' THEN 'billing-wallet'
+  WHEN 'api-basics' THEN 'api-deployment'
+  WHEN 'faq' THEN 'support'
+END
+SET a.`category_id` = p.`id`,
+    a.`language` = p.`language`,
+    a.`section` = p.`section`,
+    a.`updated_at` = NOW()
+WHERE c.`language` = 'zh-CN'
+  AND c.`category_code` IN (
+  'getting-started',
+  'machine-selection',
+  'rental-orders',
+  'recharge-wallet',
+  'profit-settlement',
+  'api-basics',
+  'faq'
+);
+
+DELETE FROM `doc_category`
+WHERE `language` = 'zh-CN'
+  AND `category_code` IN (
+  'getting-started',
+  'machine-selection',
+  'rental-orders',
+  'recharge-wallet',
+  'profit-settlement',
+  'api-basics',
+  'faq'
+);
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       '注册账号与登录',
+       'account-signup-login',
+       '说明如何注册账号、完成邮箱验证、登录平台以及找回密码。',
+       CONCAT(
+         '# 注册账号与登录', CHAR(10), CHAR(10),
+         '使用平台前需要先注册账号。账号用于管理钱包、订单、API 凭证、收益记录和团队关系。请使用真实可接收邮件的邮箱，避免因为无法接收验证码而影响登录或找回密码。', CHAR(10), CHAR(10),
+         '## 注册流程', CHAR(10), CHAR(10),
+         '进入注册页面后填写邮箱、密码和必要的邀请码信息。系统会发送邮箱验证码，验证码有有效期，过期后需要重新发送。注册成功后即可使用邮箱和密码登录。', CHAR(10), CHAR(10),
+         '## 登录方式', CHAR(10), CHAR(10),
+         '平台支持密码登录。登录成功后，前端会保存访问令牌，并在访问钱包、订单、API 管理等接口时自动携带。令牌过期后需要重新登录。', CHAR(10), CHAR(10),
+         '## 找回密码', CHAR(10), CHAR(10),
+         '如果忘记密码，可以通过邮箱验证码重置。重置后旧密码立即失效。建议设置强密码，不要与其他网站共用同一密码。'
+       ),
+       1, 0, '2026-05-04 09:05:00', 2, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'guides'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       '选择合适的 GPU 机器',
+       'choose-gpu-machine',
+       '介绍如何根据显存、算力、价格、地区和任务类型选择合适的 GPU 机器。',
+       CONCAT(
+         '# 选择合适的 GPU 机器', CHAR(10), CHAR(10),
+         '选择机器时不要只看显卡名称。实际租赁决策应同时考虑显存、算力、价格、地区、库存、租赁周期和任务类型。不同任务对资源的瓶颈不同，错误选型会造成成本浪费或任务失败。', CHAR(10), CHAR(10),
+         '## 看任务类型', CHAR(10), CHAR(10),
+         '模型推理通常更关注并发、延迟和显存常驻能力。训练和微调更关注显存容量、数据读取、长时间稳定性和 checkpoint 写入速度。内容生成任务还需要关注批处理能力和磁盘空间。', CHAR(10), CHAR(10),
+         '## 看显存容量', CHAR(10), CHAR(10),
+         '显存不足会导致 OOM、频繁降 batch 或无法加载模型。新用户建议先用短周期机器跑通真实任务，再根据实际显存峰值决定是否升级到更大显存机器。', CHAR(10), CHAR(10),
+         '## 看租赁周期', CHAR(10), CHAR(10),
+         '短周期适合测试和验证，长周期适合稳定任务。不要在任务还没有跑通时直接选择长周期，避免资源闲置或选型错误。'
+       ),
+       1, 0, '2026-05-04 09:10:00', 3, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'compute-rental'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       '充值 USDT 并确认到账',
+       'recharge-usdt',
+       '说明 USDT 充值流程、凭证提交、后台审核和到账后的钱包变化。',
+       CONCAT(
+         '# 充值 USDT 并确认到账', CHAR(10), CHAR(10),
+         '租赁机器前需要确保钱包余额充足。平台当前以 USDT 作为主要计价和结算单位，用户提交充值申请后，需要等待后台审核确认到账。', CHAR(10), CHAR(10),
+         '## 创建充值申请', CHAR(10), CHAR(10),
+         '进入充值页面后选择充值渠道，填写充值金额，并按页面展示的收款信息完成转账。转账完成后提交交易凭证、交易哈希或截图，方便后台核对。', CHAR(10), CHAR(10),
+         '## 审核与到账', CHAR(10), CHAR(10),
+         '后台审核通过后，充值金额会进入用户钱包可用余额。审核拒绝时，系统会记录拒绝原因，用户可以根据提示重新提交。', CHAR(10), CHAR(10),
+         '## 注意事项', CHAR(10), CHAR(10),
+         '请确认链网络和收款地址一致。不同网络之间转错地址可能造成资产无法找回。充值金额、交易凭证和实际到账记录应保持一致。'
+       ),
+       1, 0, '2026-05-04 09:15:00', 4, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'billing-wallet'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       '创建算力租赁订单',
+       'create-rental-order',
+       '介绍从选择商品、确认周期、支付余额到生成租赁订单的完整流程。',
+       CONCAT(
+         '# 创建算力租赁订单', CHAR(10), CHAR(10),
+         '算力租赁订单用于锁定指定 GPU 商品和租赁周期。创建订单前，请先确认钱包余额、机器规格、地区、库存和任务需求。', CHAR(10), CHAR(10),
+         '## 下单前检查', CHAR(10), CHAR(10),
+         '确认 GPU 型号、显存、价格、可租日期、库存和租赁周期。对于训练或部署任务，建议提前确认镜像、模型文件、数据集和启动脚本是否准备完成。', CHAR(10), CHAR(10),
+         '## 创建订单', CHAR(10), CHAR(10),
+         '在商品详情页选择租赁周期后提交订单。系统会根据商品价格和周期计算应付金额。余额充足时完成支付，余额不足时需要先充值。', CHAR(10), CHAR(10),
+         '## 支付后状态', CHAR(10), CHAR(10),
+         '支付成功后订单进入后续激活流程。不同商品可能存在自动激活或人工处理差异，请以订单状态和后台通知为准。'
+       ),
+       1, 0, '2026-05-04 09:20:00', 5, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'compute-rental'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       '查看订单状态与到期处理',
+       'order-status-expire',
+       '解释待支付、激活中、运行中、已到期、提前关闭等订单状态的含义。',
+       CONCAT(
+         '# 查看订单状态与到期处理', CHAR(10), CHAR(10),
+         '订单状态反映租赁流程当前所处阶段。理解状态含义，可以帮助用户判断是否需要支付、等待激活、处理异常或准备续租。', CHAR(10), CHAR(10),
+         '## 常见状态', CHAR(10), CHAR(10),
+         '待支付表示订单已创建但尚未完成付款。激活中表示系统或管理员正在准备资源。运行中表示租赁已生效。已到期表示租赁周期结束。提前关闭表示订单在到期前被终止。', CHAR(10), CHAR(10),
+         '## 到期前准备', CHAR(10), CHAR(10),
+         '如果任务仍需继续运行，应提前关注到期时间和钱包余额。需要保留的数据、日志、模型权重和输出结果，应在到期前完成备份。', CHAR(10), CHAR(10),
+         '## 异常处理', CHAR(10), CHAR(10),
+         '如果订单长时间停留在激活中，或运行状态与实际资源不一致，请联系平台支持，并提供订单号、机器信息和问题截图。'
+       ),
+       1, 0, '2026-05-04 09:25:00', 6, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'compute-rental'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       '部署模型 API 前的准备',
+       'model-api-deploy-preparation',
+       '说明部署模型 API 前需要准备的模型、镜像、环境变量、端口和日志。',
+       CONCAT(
+         '# 部署模型 API 前的准备', CHAR(10), CHAR(10),
+         '将模型能力封装成 API 前，需要先确认模型文件、运行环境、启动命令、端口、安全策略和日志路径。准备越充分，上线后的排查成本越低。', CHAR(10), CHAR(10),
+         '## 模型与镜像', CHAR(10), CHAR(10),
+         '确认模型权重来源、版本、量化方式和所需显存。运行环境建议固定 Python、CUDA、推理框架和依赖版本，避免重启后出现环境不可复现。', CHAR(10), CHAR(10),
+         '## 启动参数', CHAR(10), CHAR(10),
+         '明确服务端口、并发上限、单请求超时、最大输入长度、最大输出长度和日志目录。参数应写入配置文件或启动脚本，不建议临时手工输入。', CHAR(10), CHAR(10),
+         '## 上线检查', CHAR(10), CHAR(10),
+         '上线前至少完成一次健康检查、一次真实请求测试和一次异常请求测试。确认失败响应可读，日志中能定位请求 ID 和错误原因。'
+       ),
+       1, 1, '2026-05-04 09:30:00', 7, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'api-deployment'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       '管理 API Token 与调用地址',
+       'api-token-usage',
+       '解释 API Token 的用途、保管方式、调用地址和撤销策略。',
+       CONCAT(
+         '# 管理 API Token 与调用地址', CHAR(10), CHAR(10),
+         'API Token 用于调用模型服务。它相当于访问凭证，应像密码一样保管。不要把 Token 写入前端代码、公开仓库、截图或日志。', CHAR(10), CHAR(10),
+         '## 获取 Token', CHAR(10), CHAR(10),
+         '在 API 管理页面创建或查看可用凭证。为了安全，系统通常只展示掩码后的 Token，完整 Token 应在创建后立即妥善保存。', CHAR(10), CHAR(10),
+         '## 调用地址', CHAR(10), CHAR(10),
+         '调用地址由平台基础地址、模型服务路径和具体接口组成。前端或后端服务调用时需要在请求头中携带 Token，并按照接口要求传入模型参数。', CHAR(10), CHAR(10),
+         '## 撤销与更换', CHAR(10), CHAR(10),
+         '如果怀疑 Token 泄露，应立即撤销并生成新 Token。生产环境建议定期轮换 Token，并为不同业务系统使用不同凭证。'
+       ),
+       1, 0, '2026-05-04 09:35:00', 8, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'api-deployment'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       'Token 收益与钱包记录说明',
+       'token-profit-wallet',
+       '说明收益入账、钱包流水、冻结余额和可用余额之间的关系。',
+       CONCAT(
+         '# Token 收益与钱包记录说明', CHAR(10), CHAR(10),
+         '平台中的收益、充值、提现、租赁支付和退款都会形成钱包流水。理解钱包记录可以帮助用户核对余额变化，减少对账疑问。', CHAR(10), CHAR(10),
+         '## 可用余额与冻结余额', CHAR(10), CHAR(10),
+         '可用余额可以用于支付租赁订单或申请提现。冻结余额通常表示正在处理中的提现、订单或其他需要暂时锁定的金额。冻结解除后，余额会根据业务结果回到可用余额或完成扣减。', CHAR(10), CHAR(10),
+         '## 收益入账', CHAR(10), CHAR(10),
+         '收益记录会根据平台规则生成并结算。结算完成后，对应金额进入钱包流水。用户可以通过时间、业务类型和订单号核对来源。', CHAR(10), CHAR(10),
+         '## 对账建议', CHAR(10), CHAR(10),
+         '遇到余额疑问时，先查看钱包流水，再查看关联订单或收益记录。联系客服时请提供流水号、业务单号和发生时间。'
+       ),
+       1, 0, '2026-05-04 09:40:00', 9, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'billing-wallet'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+INSERT INTO `doc_article` (`category_id`, `language`, `section`, `title`, `slug`, `summary`, `content_markdown`, `publish_status`, `is_section_home`, `published_at`, `sort_no`, `view_count`, `created_by`)
+SELECT c.`id`,
+       c.`language`,
+       c.`section`,
+       '常见问题与排查清单',
+       'faq-troubleshooting',
+       '整理登录、充值、订单、API 和收益相关的常见问题处理方式。',
+       CONCAT(
+         '# 常见问题与排查清单', CHAR(10), CHAR(10),
+         '如果遇到平台使用问题，可以先按本文清单自查。大多数问题都可以通过确认账号、订单号、交易凭证、接口日志和时间范围快速定位。', CHAR(10), CHAR(10),
+         '## 登录问题', CHAR(10), CHAR(10),
+         '确认邮箱是否正确、验证码是否过期、密码是否输入错误。如果多次失败，可以使用找回密码流程重置。', CHAR(10), CHAR(10),
+         '## 充值未到账', CHAR(10), CHAR(10),
+         '先确认链网络、收款地址、交易哈希和提交金额是否一致。后台审核需要一定时间，提交凭证越完整，处理越快。', CHAR(10), CHAR(10),
+         '## 订单未激活', CHAR(10), CHAR(10),
+         '确认订单是否已支付、库存是否充足、是否需要人工处理。长时间未激活时，请提供订单号联系客服。', CHAR(10), CHAR(10),
+         '## API 调用失败', CHAR(10), CHAR(10),
+         '检查 Token 是否有效、调用地址是否正确、请求参数是否符合模型要求、服务是否已经启动。排查时请保留请求时间、错误码和响应内容。'
+       ),
+       1, 1, '2026-05-04 09:45:00', 10, 0,
+       (SELECT `id` FROM `sys_admin` WHERE `user_name` = 'admin' ORDER BY `id` LIMIT 1)
+FROM `doc_category` c
+WHERE c.`category_code` = 'support'
+  AND c.`language` = 'zh-CN'
+ON DUPLICATE KEY UPDATE
+  `category_id` = VALUES(`category_id`),
+  `language` = VALUES(`language`),
+  `section` = VALUES(`section`),
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`),
+  `publish_status` = VALUES(`publish_status`),
+  `is_section_home` = VALUES(`is_section_home`),
+  `published_at` = VALUES(`published_at`),
+  `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+
+
+

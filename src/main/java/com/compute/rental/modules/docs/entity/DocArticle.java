@@ -19,6 +19,12 @@ public class DocArticle {
     @TableField("category_id")
     private Long categoryId;
 
+    @TableField("language")
+    private String language;
+
+    @TableField("section")
+    private String section;
+
     @TableField("title")
     private String title;
 
@@ -33,6 +39,9 @@ public class DocArticle {
 
     @TableField("publish_status")
     private Integer publishStatus;
+
+    @TableField("is_section_home")
+    private Integer isSectionHome;
 
     @TableField("published_at")
     private LocalDateTime publishedAt;

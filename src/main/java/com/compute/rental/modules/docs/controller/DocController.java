@@ -27,8 +27,11 @@ public class DocController {
 
     @Operation(summary = "Public doc category tree")
     @GetMapping("/categories")
-    public ApiResponse<List<DocCategoryResponse>> categories() {
-        return ApiResponse.success(docService.publicCategories());
+    public ApiResponse<List<DocCategoryResponse>> categories(
+            @RequestParam(required = false) String section,
+            @RequestParam(required = false) String language
+    ) {
+        return ApiResponse.success(docService.publicCategories(section, language));
     }
 
     @Operation(summary = "Public doc articles")
@@ -36,22 +39,39 @@ public class DocController {
     public ApiResponse<PageResult<DocArticleResponse>> articles(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String section,
+            @RequestParam(required = false) String language,
             @RequestParam(required = false, name = "category_id") Long categoryId,
             @RequestParam(required = false) String keyword
     ) {
-        return ApiResponse.success(docService.publicArticles(pageNo, pageSize, categoryId, keyword));
+        return ApiResponse.success(docService.publicArticles(pageNo, pageSize, section, language, categoryId, keyword));
+    }
+
+    @Operation(summary = "Public doc section home article")
+    @GetMapping("/articles/section/{section}/home")
+    public ApiResponse<DocArticleResponse> sectionHome(
+            @PathVariable String section,
+            @RequestParam(required = false) String language
+    ) {
+        return ApiResponse.success(docService.publicSectionHome(section, language));
     }
 
     @Operation(summary = "Public doc article detail")
     @GetMapping("/articles/{id}")
-    public ApiResponse<DocArticleResponse> article(@PathVariable Long id) {
-        return ApiResponse.success(docService.publicArticle(id));
+    public ApiResponse<DocArticleResponse> article(
+            @PathVariable Long id,
+            @RequestParam(required = false) String language
+    ) {
+        return ApiResponse.success(docService.publicArticle(id, language));
     }
 
     @Operation(summary = "Public doc article detail by slug")
     @GetMapping("/articles/slug/{slug}")
-    public ApiResponse<DocArticleResponse> articleBySlug(@PathVariable String slug) {
-        return ApiResponse.success(docService.publicArticleBySlug(slug));
+    public ApiResponse<DocArticleResponse> articleBySlug(
+            @PathVariable String slug,
+            @RequestParam(required = false) String language
+    ) {
+        return ApiResponse.success(docService.publicArticleBySlug(slug, language));
     }
 
     @Operation(summary = "Public doc article search")
@@ -59,8 +79,10 @@ public class DocController {
     public ApiResponse<PageResult<DocArticleResponse>> search(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String section,
+            @RequestParam(required = false) String language,
             @RequestParam(required = false) String keyword
     ) {
-        return ApiResponse.success(docService.publicSearch(pageNo, pageSize, keyword));
+        return ApiResponse.success(docService.publicSearch(pageNo, pageSize, section, language, keyword));
     }
 }

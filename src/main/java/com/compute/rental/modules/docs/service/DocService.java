@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.compute.rental.common.enums.CommonStatus;
+import com.compute.rental.common.enums.DocLanguage;
 import com.compute.rental.common.enums.DocPublishStatus;
+import com.compute.rental.common.enums.DocSection;
 import com.compute.rental.common.enums.ErrorCode;
 import com.compute.rental.common.exception.BusinessException;
 import com.compute.rental.common.page.PageResult;
@@ -47,53 +49,87 @@ public class DocService {
         this.adminLogService = adminLogService;
     }
 
-    public List<DocCategoryResponse> publicCategories() {
+    public List<DocCategoryResponse> publicCategories(String section, String language) {
+        var normalizedLanguage = normalizeLanguageDefault(language);
+        var normalizedSection = normalizeSectionOptional(section);
         var categories = categoryMapper.selectList(new LambdaQueryWrapper<DocCategory>()
+                .eq(DocCategory::getLanguage, normalizedLanguage)
+                .eq(normalizedSection != null, DocCategory::getSection, normalizedSection)
                 .eq(DocCategory::getStatus, CommonStatus.ENABLED.value())
                 .orderByAsc(DocCategory::getSortNo)
                 .orderByAsc(DocCategory::getId));
         var childrenByParentId = new HashMap<Long, List<DocCategory>>();
         for (var category : categories) {
-            childrenByParentId.computeIfAbsent(category.getParentId(), ignored -> new ArrayList<>()).add(category);
+            if (isCategoryPathEnabled(category.getId(), normalizedLanguage, normalizedSection)) {
+                childrenByParentId.computeIfAbsent(category.getParentId(), ignored -> new ArrayList<>()).add(category);
+            }
         }
         return childrenByParentId.getOrDefault(null, Collections.emptyList()).stream()
                 .map(category -> categoryResponse(category, childrenByParentId, new HashSet<>()))
                 .toList();
     }
 
-    public PageResult<DocArticleResponse> publicArticles(long pageNo, long pageSize, Long categoryId, String keyword) {
-        var categoryIds = enabledCategoryIds();
+    public PageResult<DocArticleResponse> publicArticles(long pageNo, long pageSize, String section, String language,
+                                                         Long categoryId, String keyword) {
+        var normalizedLanguage = normalizeLanguageDefault(language);
+        var normalizedSection = normalizeSectionOptional(section);
+        var categoryIds = enabledCategoryIds(normalizedLanguage, normalizedSection);
         if (categoryIds.isEmpty() || (categoryId != null && !categoryIds.contains(categoryId))) {
             return new PageResult<>(Collections.emptyList(), 0, pageNo, pageSize);
         }
-        return pageArticles(pageNo, pageSize, categoryId, DocPublishStatus.PUBLISHED.value(), keyword,
-                null, null, categoryIds);
+        return pageArticles(pageNo, pageSize, normalizedLanguage, normalizedSection, categoryId, DocPublishStatus.PUBLISHED.value(),
+                null, keyword, null, null, categoryIds);
     }
 
-    public PageResult<DocArticleResponse> publicSearch(long pageNo, long pageSize, String keyword) {
-        return publicArticles(pageNo, pageSize, null, keyword);
+    public PageResult<DocArticleResponse> publicSearch(long pageNo, long pageSize, String section,
+                                                       String language, String keyword) {
+        return publicArticles(pageNo, pageSize, section, language, null, keyword);
     }
 
-    public DocArticleResponse publicArticle(Long id) {
+    public DocArticleResponse publicSectionHome(String section, String language) {
+        var normalizedLanguage = normalizeLanguageDefault(language);
+        var normalizedSection = normalizeSectionRequired(section);
+        var article = articleMapper.selectOne(new LambdaQueryWrapper<DocArticle>()
+                .eq(DocArticle::getLanguage, normalizedLanguage)
+                .eq(DocArticle::getSection, normalizedSection)
+                .eq(DocArticle::getPublishStatus, DocPublishStatus.PUBLISHED.value())
+                .eq(DocArticle::getIsSectionHome, 1)
+                .last("LIMIT 1"));
+        if (article == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "分区首页文档不存在");
+        }
+        return publicArticleResponse(article);
+    }
+
+    public DocArticleResponse publicArticle(Long id, String language) {
+        var normalizedLanguage = normalizeLanguageDefault(language);
         var article = articleMapper.selectOne(new LambdaQueryWrapper<DocArticle>()
                 .eq(DocArticle::getId, id)
+                .eq(DocArticle::getLanguage, normalizedLanguage)
                 .eq(DocArticle::getPublishStatus, DocPublishStatus.PUBLISHED.value())
                 .last("LIMIT 1"));
         return publicArticleResponse(article);
     }
 
-    public DocArticleResponse publicArticleBySlug(String slug) {
+    public DocArticleResponse publicArticleBySlug(String slug, String language) {
+        var normalizedLanguage = normalizeLanguageDefault(language);
         var article = articleMapper.selectOne(new LambdaQueryWrapper<DocArticle>()
+                .eq(DocArticle::getLanguage, normalizedLanguage)
                 .eq(DocArticle::getSlug, normalizeRequired(slug, "slug"))
                 .eq(DocArticle::getPublishStatus, DocPublishStatus.PUBLISHED.value())
                 .last("LIMIT 1"));
         return publicArticleResponse(article);
     }
 
-    public PageResult<DocCategoryResponse> adminCategories(long pageNo, long pageSize, Long parentId, Integer status) {
+    public PageResult<DocCategoryResponse> adminCategories(long pageNo, long pageSize, String language, String section,
+                                                          Long parentId, Integer status) {
+        var normalizedLanguage = normalizeLanguageDefault(language);
+        var normalizedSection = normalizeSectionOptional(section);
         validateCommonStatus(status);
         var page = new Page<DocCategory>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<DocCategory>()
+                .eq(DocCategory::getLanguage, normalizedLanguage)
+                .eq(normalizedSection != null, DocCategory::getSection, normalizedSection)
                 .eq(parentId != null, DocCategory::getParentId, parentId)
                 .eq(status != null, DocCategory::getStatus, status)
                 .orderByAsc(DocCategory::getSortNo)
@@ -105,12 +141,16 @@ public class DocService {
 
     @Transactional
     public DocCategoryResponse createCategory(DocCategoryRequest request, Long adminId, String ip) {
+        var language = normalizeLanguageDefault(request.language());
+        var section = normalizeSectionRequired(request.section());
         validateCommonStatus(request.status());
-        validateParent(null, request.parentId());
+        validateParent(null, request.parentId(), language, section);
         var categoryCode = normalizeRequired(request.categoryCode(), "categoryCode");
-        validateCategoryCodeUnique(categoryCode, null);
+        validateCategoryCodeUnique(language, section, categoryCode, null);
         var now = DateTimeUtils.now();
         var category = new DocCategory();
+        category.setLanguage(language);
+        category.setSection(section);
         category.setParentId(request.parentId());
         category.setCategoryCode(categoryCode);
         category.setCategoryName(normalizeRequired(request.categoryName(), "categoryName"));
@@ -127,14 +167,19 @@ public class DocService {
     @Transactional
     public DocCategoryResponse updateCategory(Long id, DocCategoryRequest request, Long adminId, String ip) {
         var existing = requireCategory(id);
+        var language = normalizeLanguageDefault(request.language());
+        var section = normalizeSectionRequired(request.section());
         validateCommonStatus(request.status());
-        validateParent(id, request.parentId());
+        validateCategoryScopeChange(existing, language, section);
+        validateParent(id, request.parentId(), language, section);
         var categoryCode = normalizeRequired(request.categoryCode(), "categoryCode");
-        validateCategoryCodeUnique(categoryCode, id);
+        validateCategoryCodeUnique(language, section, categoryCode, id);
         var status = request.status() == null ? existing.getStatus() : request.status();
         var now = DateTimeUtils.now();
         categoryMapper.update(null, new LambdaUpdateWrapper<DocCategory>()
                 .eq(DocCategory::getId, id)
+                .set(DocCategory::getLanguage, language)
+                .set(DocCategory::getSection, section)
                 .set(DocCategory::getParentId, request.parentId())
                 .set(DocCategory::getCategoryCode, categoryCode)
                 .set(DocCategory::getCategoryName, normalizeRequired(request.categoryName(), "categoryName"))
@@ -175,11 +220,16 @@ public class DocService {
         log(adminId, "DELETE_DOC_CATEGORY", "doc_category", id, category.getCategoryName(), ip);
     }
 
-    public PageResult<DocArticleResponse> adminArticles(long pageNo, long pageSize, Long categoryId,
-                                                       Integer publishStatus, String keyword,
+    public PageResult<DocArticleResponse> adminArticles(long pageNo, long pageSize, String language, String section,
+                                                       Long categoryId, Integer publishStatus,
+                                                       Integer isSectionHome, String keyword,
                                                        LocalDateTime startTime, LocalDateTime endTime) {
+        var normalizedLanguage = normalizeLanguageDefault(language);
+        var normalizedSection = normalizeSectionOptional(section);
         validatePublishStatus(publishStatus);
-        return pageArticles(pageNo, pageSize, categoryId, publishStatus, keyword, startTime, endTime, null);
+        validateHomeFlag(isSectionHome);
+        return pageArticles(pageNo, pageSize, normalizedLanguage, normalizedSection, categoryId, publishStatus, isSectionHome,
+                keyword, startTime, endTime, null);
     }
 
     public DocArticleResponse adminArticle(Long id) {
@@ -188,18 +238,27 @@ public class DocService {
 
     @Transactional
     public DocArticleResponse createArticle(DocArticleRequest request, Long adminId, String ip) {
+        var language = normalizeLanguageDefault(request.language());
+        var section = normalizeSectionRequired(request.section());
         validatePublishStatus(request.publishStatus());
-        requireCategory(request.categoryId());
+        var category = requireCategory(request.categoryId());
+        validateArticleCategoryScope(language, section, category);
+        var isSectionHome = defaultHomeFlag(request.isSectionHome());
+        var publishStatus = request.publishStatus() == null ? DocPublishStatus.DRAFT.value() : request.publishStatus();
+        validatePublishedHomeUnique(language, section, null, publishStatus, isSectionHome);
         var slug = normalizeRequired(request.slug(), "slug");
-        validateSlugUnique(slug, null);
+        validateSlugUnique(language, slug, null);
         var now = DateTimeUtils.now();
         var article = new DocArticle();
+        article.setLanguage(language);
+        article.setSection(section);
         article.setCategoryId(request.categoryId());
         article.setTitle(normalizeRequired(request.title(), "title"));
         article.setSlug(slug);
         article.setSummary(normalizeNullable(request.summary()));
         article.setContentMarkdown(normalizeRequired(request.contentMarkdown(), "contentMarkdown"));
-        article.setPublishStatus(request.publishStatus() == null ? DocPublishStatus.DRAFT.value() : request.publishStatus());
+        article.setPublishStatus(publishStatus);
+        article.setIsSectionHome(isSectionHome);
         article.setPublishedAt(Integer.valueOf(DocPublishStatus.PUBLISHED.value()).equals(article.getPublishStatus()) ? now : null);
         article.setSortNo(defaultSortNo(request.sortNo()));
         article.setViewCount(0L);
@@ -214,11 +273,16 @@ public class DocService {
     @Transactional
     public DocArticleResponse updateArticle(Long id, DocArticleRequest request, Long adminId, String ip) {
         var existing = requireArticle(id);
+        var language = normalizeLanguageDefault(request.language());
+        var section = normalizeSectionRequired(request.section());
         validatePublishStatus(request.publishStatus());
-        requireCategory(request.categoryId());
-        var slug = normalizeRequired(request.slug(), "slug");
-        validateSlugUnique(slug, id);
+        var category = requireCategory(request.categoryId());
+        validateArticleCategoryScope(language, section, category);
+        var isSectionHome = defaultHomeFlag(request.isSectionHome());
         var publishStatus = request.publishStatus() == null ? existing.getPublishStatus() : request.publishStatus();
+        validatePublishedHomeUnique(language, section, id, publishStatus, isSectionHome);
+        var slug = normalizeRequired(request.slug(), "slug");
+        validateSlugUnique(language, slug, id);
         var publishedAt = existing.getPublishedAt();
         if (Integer.valueOf(DocPublishStatus.PUBLISHED.value()).equals(publishStatus)
                 && !Integer.valueOf(DocPublishStatus.PUBLISHED.value()).equals(existing.getPublishStatus())) {
@@ -227,12 +291,15 @@ public class DocService {
         var now = DateTimeUtils.now();
         articleMapper.update(null, new LambdaUpdateWrapper<DocArticle>()
                 .eq(DocArticle::getId, id)
+                .set(DocArticle::getLanguage, language)
+                .set(DocArticle::getSection, section)
                 .set(DocArticle::getCategoryId, request.categoryId())
                 .set(DocArticle::getTitle, normalizeRequired(request.title(), "title"))
                 .set(DocArticle::getSlug, slug)
                 .set(DocArticle::getSummary, normalizeNullable(request.summary()))
                 .set(DocArticle::getContentMarkdown, normalizeRequired(request.contentMarkdown(), "contentMarkdown"))
                 .set(DocArticle::getPublishStatus, publishStatus)
+                .set(DocArticle::getIsSectionHome, isSectionHome)
                 .set(DocArticle::getPublishedAt, publishedAt)
                 .set(DocArticle::getSortNo, defaultSortNo(request.sortNo()))
                 .set(DocArticle::getUpdatedAt, now));
@@ -242,7 +309,11 @@ public class DocService {
 
     @Transactional
     public DocArticleResponse publishArticle(Long id, Long adminId, String ip) {
-        requireArticle(id);
+        var article = requireArticle(id);
+        if (Integer.valueOf(1).equals(article.getIsSectionHome())) {
+            validatePublishedHomeUnique(article.getLanguage(), article.getSection(), id,
+                    DocPublishStatus.PUBLISHED.value(), article.getIsSectionHome());
+        }
         var now = DateTimeUtils.now();
         articleMapper.update(null, new LambdaUpdateWrapper<DocArticle>()
                 .eq(DocArticle::getId, id)
@@ -271,17 +342,21 @@ public class DocService {
         log(adminId, "DELETE_DOC_ARTICLE", "doc_article", id, article.getTitle(), ip);
     }
 
-    private PageResult<DocArticleResponse> pageArticles(long pageNo, long pageSize, Long categoryId,
-                                                       Integer publishStatus, String keyword,
+    private PageResult<DocArticleResponse> pageArticles(long pageNo, long pageSize, String language, String section,
+                                                       Long categoryId,
+                                                       Integer publishStatus, Integer isSectionHome, String keyword,
                                                        LocalDateTime startTime, LocalDateTime endTime,
                                                        List<Long> allowedCategoryIds) {
         var normalizedKeyword = normalizeNullable(keyword);
         var page = new Page<DocArticle>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<DocArticle>()
+                .eq(DocArticle::getLanguage, language)
+                .eq(section != null, DocArticle::getSection, section)
                 .eq(categoryId != null, DocArticle::getCategoryId, categoryId)
                 .in(allowedCategoryIds != null, DocArticle::getCategoryId,
                         allowedCategoryIds == null ? Collections.emptyList() : allowedCategoryIds)
                 .eq(publishStatus != null, DocArticle::getPublishStatus, publishStatus)
+                .eq(isSectionHome != null, DocArticle::getIsSectionHome, isSectionHome)
                 .ge(startTime != null, DocArticle::getPublishedAt, startTime)
                 .le(endTime != null, DocArticle::getPublishedAt, endTime)
                 .and(StringUtils.hasText(normalizedKeyword), query -> query
@@ -290,6 +365,7 @@ public class DocService {
                         .like(DocArticle::getSummary, normalizedKeyword)
                         .or()
                         .like(DocArticle::getContentMarkdown, normalizedKeyword))
+                .orderByDesc(DocArticle::getIsSectionHome)
                 .orderByAsc(DocArticle::getSortNo)
                 .orderByDesc(DocArticle::getPublishedAt)
                 .orderByDesc(DocArticle::getId);
@@ -299,7 +375,7 @@ public class DocService {
     }
 
     private DocArticleResponse publicArticleResponse(DocArticle article) {
-        if (article == null || !isCategoryPathEnabled(article.getCategoryId())) {
+        if (article == null || !isCategoryPathEnabled(article.getCategoryId(), article.getLanguage(), article.getSection())) {
             throw new BusinessException(ErrorCode.DOC_ARTICLE_NOT_FOUND);
         }
         articleMapper.update(null, new LambdaUpdateWrapper<DocArticle>()
@@ -309,17 +385,21 @@ public class DocService {
         return articleResponse(article);
     }
 
-    private List<Long> enabledCategoryIds() {
+    private List<Long> enabledCategoryIds(String language, String section) {
         return categoryMapper.selectList(new LambdaQueryWrapper<DocCategory>()
+                        .eq(DocCategory::getLanguage, language)
+                        .eq(section != null, DocCategory::getSection, section)
                         .eq(DocCategory::getStatus, CommonStatus.ENABLED.value()))
                 .stream()
                 .map(DocCategory::getId)
-                .filter(this::isCategoryPathEnabled)
+                .filter(categoryId -> isCategoryPathEnabled(categoryId, language, section))
                 .toList();
     }
 
-    private boolean isCategoryPathEnabled(Long categoryId) {
+    private boolean isCategoryPathEnabled(Long categoryId, String language, String section) {
         var currentId = categoryId;
+        var expectedLanguage = language;
+        var expectedSection = section;
         var visited = new HashSet<Long>();
         while (currentId != null) {
             if (!visited.add(currentId)) {
@@ -327,6 +407,15 @@ public class DocService {
             }
             var category = categoryMapper.selectById(currentId);
             if (category == null || !Integer.valueOf(CommonStatus.ENABLED.value()).equals(category.getStatus())) {
+                return false;
+            }
+            if (!expectedLanguage.equals(category.getLanguage())) {
+                return false;
+            }
+            if (expectedSection == null) {
+                expectedSection = category.getSection();
+            }
+            if (!expectedSection.equals(category.getSection())) {
                 return false;
             }
             currentId = category.getParentId();
@@ -337,6 +426,8 @@ public class DocService {
     private DocCategoryResponse categoryResponse(DocCategory category) {
         return new DocCategoryResponse(
                 category.getId(),
+                category.getLanguage(),
+                category.getSection(),
                 category.getParentId(),
                 category.getCategoryCode(),
                 category.getCategoryName(),
@@ -355,10 +446,14 @@ public class DocService {
             return categoryResponse(category);
         }
         var children = childrenByParentId.getOrDefault(category.getId(), Collections.emptyList()).stream()
+                .filter(child -> category.getLanguage().equals(child.getLanguage()))
+                .filter(child -> category.getSection().equals(child.getSection()))
                 .map(child -> categoryResponse(child, childrenByParentId, new HashSet<>(visited)))
                 .toList();
         return new DocCategoryResponse(
                 category.getId(),
+                category.getLanguage(),
+                category.getSection(),
                 category.getParentId(),
                 category.getCategoryCode(),
                 category.getCategoryName(),
@@ -374,6 +469,8 @@ public class DocService {
     private DocArticleResponse articleResponse(DocArticle article) {
         return new DocArticleResponse(
                 article.getId(),
+                article.getLanguage(),
+                article.getSection(),
                 article.getCategoryId(),
                 categoryName(article.getCategoryId()),
                 article.getTitle(),
@@ -381,6 +478,7 @@ public class DocService {
                 article.getSummary(),
                 article.getContentMarkdown(),
                 article.getPublishStatus(),
+                article.getIsSectionHome(),
                 article.getPublishedAt(),
                 article.getSortNo(),
                 article.getViewCount(),
@@ -411,13 +509,44 @@ public class DocService {
         return article;
     }
 
-    private void validateParent(Long id, Long parentId) {
+    private void validateParent(Long id, Long parentId, String language, String section) {
         if (parentId == null) {
             return;
         }
-        requireCategory(parentId);
+        var parent = requireCategory(parentId);
+        if (!language.equals(parent.getLanguage())) {
+            throw new BusinessException(ErrorCode.DOC_CATEGORY_LANGUAGE_MISMATCH);
+        }
+        if (!section.equals(parent.getSection())) {
+            throw new BusinessException(ErrorCode.DOC_CATEGORY_SECTION_MISMATCH);
+        }
         if (id != null && createsCycle(id, parentId)) {
             throw new BusinessException(ErrorCode.DOC_CATEGORY_PARENT_CYCLE);
+        }
+    }
+
+    private void validateCategoryScopeChange(DocCategory existing, String language, String section) {
+        if (language.equals(existing.getLanguage()) && section.equals(existing.getSection())) {
+            return;
+        }
+        var childCount = categoryMapper.selectCount(new LambdaQueryWrapper<DocCategory>()
+                .eq(DocCategory::getParentId, existing.getId()));
+        var articleCount = articleMapper.selectCount(new LambdaQueryWrapper<DocArticle>()
+                .eq(DocArticle::getCategoryId, existing.getId()));
+        if (childCount > 0 || articleCount > 0) {
+            if (!language.equals(existing.getLanguage())) {
+                throw new BusinessException(ErrorCode.DOC_CATEGORY_LANGUAGE_MISMATCH);
+            }
+            throw new BusinessException(ErrorCode.DOC_CATEGORY_SECTION_MISMATCH);
+        }
+    }
+
+    private void validateArticleCategoryScope(String language, String section, DocCategory category) {
+        if (!language.equals(category.getLanguage())) {
+            throw new BusinessException(ErrorCode.DOC_ARTICLE_LANGUAGE_MISMATCH);
+        }
+        if (!section.equals(category.getSection())) {
+            throw new BusinessException(ErrorCode.DOC_ARTICLE_SECTION_MISMATCH);
         }
     }
 
@@ -437,8 +566,10 @@ public class DocService {
         return false;
     }
 
-    private void validateCategoryCodeUnique(String categoryCode, Long excludeId) {
+    private void validateCategoryCodeUnique(String language, String section, String categoryCode, Long excludeId) {
         var count = categoryMapper.selectCount(new LambdaQueryWrapper<DocCategory>()
+                .eq(DocCategory::getLanguage, language)
+                .eq(DocCategory::getSection, section)
                 .eq(DocCategory::getCategoryCode, categoryCode)
                 .ne(excludeId != null, DocCategory::getId, excludeId));
         if (count > 0) {
@@ -446,12 +577,30 @@ public class DocService {
         }
     }
 
-    private void validateSlugUnique(String slug, Long excludeId) {
+    private void validateSlugUnique(String language, String slug, Long excludeId) {
         var count = articleMapper.selectCount(new LambdaQueryWrapper<DocArticle>()
+                .eq(DocArticle::getLanguage, language)
                 .eq(DocArticle::getSlug, slug)
                 .ne(excludeId != null, DocArticle::getId, excludeId));
         if (count > 0) {
             throw new BusinessException(ErrorCode.DOC_ARTICLE_SLUG_EXISTS);
+        }
+    }
+
+    private void validatePublishedHomeUnique(String language, String section, Long excludeId,
+                                             Integer publishStatus, Integer isSectionHome) {
+        if (!Integer.valueOf(DocPublishStatus.PUBLISHED.value()).equals(publishStatus)
+                || !Integer.valueOf(1).equals(isSectionHome)) {
+            return;
+        }
+        var count = articleMapper.selectCount(new LambdaQueryWrapper<DocArticle>()
+                .eq(DocArticle::getLanguage, language)
+                .eq(DocArticle::getSection, section)
+                .eq(DocArticle::getPublishStatus, DocPublishStatus.PUBLISHED.value())
+                .eq(DocArticle::getIsSectionHome, 1)
+                .ne(excludeId != null, DocArticle::getId, excludeId));
+        if (count > 0) {
+            throw new BusinessException(ErrorCode.DOC_SECTION_HOME_EXISTS);
         }
     }
 
@@ -476,8 +625,58 @@ public class DocService {
         }
     }
 
+    private void validateHomeFlag(Integer isSectionHome) {
+        if (isSectionHome == null) {
+            return;
+        }
+        if (!Integer.valueOf(0).equals(isSectionHome) && !Integer.valueOf(1).equals(isSectionHome)) {
+            throw new BusinessException(ErrorCode.DOC_HOME_FLAG_INVALID);
+        }
+    }
+
     private Integer defaultSortNo(Integer sortNo) {
         return sortNo == null ? 0 : sortNo;
+    }
+
+    private Integer defaultHomeFlag(Integer isSectionHome) {
+        validateHomeFlag(isSectionHome);
+        return isSectionHome == null ? 0 : isSectionHome;
+    }
+
+    private String normalizeLanguageDefault(String value) {
+        var language = normalizeNullable(value);
+        return language == null ? DocLanguage.DEFAULT_VALUE : validateLanguage(language);
+    }
+
+    private String normalizeSectionRequired(String value) {
+        var section = normalizeNullable(value);
+        if (section == null) {
+            throw new BusinessException(ErrorCode.DOC_FIELD_REQUIRED, "section is required");
+        }
+        return validateSection(section);
+    }
+
+    private String normalizeSectionOptional(String value) {
+        var section = normalizeNullable(value);
+        return section == null ? null : validateSection(section);
+    }
+
+    private String validateLanguage(String value) {
+        for (var language : DocLanguage.values()) {
+            if (language.value().equals(value)) {
+                return value;
+            }
+        }
+        throw new BusinessException(ErrorCode.DOC_LANGUAGE_INVALID);
+    }
+
+    private String validateSection(String value) {
+        for (var section : DocSection.values()) {
+            if (section.value().equals(value)) {
+                return value;
+            }
+        }
+        throw new BusinessException(ErrorCode.DOC_SECTION_INVALID);
     }
 
     private String normalizeRequired(String value, String fieldName) {

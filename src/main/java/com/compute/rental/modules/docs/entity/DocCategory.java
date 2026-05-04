@@ -19,6 +19,12 @@ public class DocCategory {
     @TableField("parent_id")
     private Long parentId;
 
+    @TableField("language")
+    private String language;
+
+    @TableField("section")
+    private String section;
+
     @TableField("category_code")
     private String categoryCode;
 
