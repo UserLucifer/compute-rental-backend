@@ -1,14 +1,15 @@
-# SQL 脚本目录
+# SQL scripts
 
-后续数据库脚本按文档建表顺序放置，例如：
+Only two executable SQL scripts are kept in this directory:
 
-```text
-001_user_account.sql
-002_wallet_finance.sql
-003_product_rule.sql
-004_order_api_profit_settlement.sql
-005_commission.sql
-006_system_admin_notification.sql
+1. `schema.sql` - table structure, columns, constraints, and indexes.
+2. `init-data.sql` - initial system data, product catalog seed data, and blog seed data.
+
+Recommended execution order:
+
+```bash
+mysql -h <host> -P <port> -u <user> -p <database> < schema.sql
+mysql -h <host> -P <port> -u <user> -p <database> < init-data.sql
 ```
 
-金额字段统一使用 `DECIMAL(20,8)`，时间字段按 `Asia/Shanghai` 口径写入。
+Review default admin credentials and business seed data before running `init-data.sql` in production.

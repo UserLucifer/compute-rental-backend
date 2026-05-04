@@ -173,6 +173,7 @@ CREATE TABLE `recharge_order` (
   KEY `idx_wallet_id` (`wallet_id`),
   KEY `idx_channel_id` (`channel_id`),
   KEY `idx_status` (`status`),
+  KEY `idx_status_credited_at` (`status`, `credited_at`),
   KEY `idx_created_at` (`created_at`),
   CONSTRAINT `fk_recharge_order_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_recharge_order_wallet` FOREIGN KEY (`wallet_id`) REFERENCES `user_wallet` (`id`),
@@ -208,6 +209,7 @@ CREATE TABLE `withdraw_order` (
   KEY `idx_user_id` (`user_id`),
   KEY `idx_wallet_id` (`wallet_id`),
   KEY `idx_status` (`status`),
+  KEY `idx_status_paid_at` (`status`, `paid_at`),
   KEY `idx_created_at` (`created_at`),
   CONSTRAINT `fk_withdraw_order_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_withdraw_order_wallet` FOREIGN KEY (`wallet_id`) REFERENCES `user_wallet` (`id`)
@@ -387,6 +389,8 @@ CREATE TABLE `rental_order` (
   KEY `idx_ai_model_id` (`ai_model_id`),
   KEY `idx_cycle_rule_id` (`cycle_rule_id`),
   KEY `idx_order_status` (`order_status`),
+  KEY `idx_profit_status` (`profit_status`),
+  KEY `idx_paid_at` (`paid_at`),
   KEY `idx_profit_time` (`profit_start_at`, `profit_end_at`),
   KEY `idx_api_generated_at` (`api_generated_at`) COMMENT '用于超时取消定时任务扫描',
   KEY `idx_auto_pause_at` (`auto_pause_at`) COMMENT '用于自动暂停定时任务扫描',
@@ -484,6 +488,7 @@ CREATE TABLE `rental_profit_record` (
   UNIQUE KEY `uk_order_profit_date` (`rental_order_id`, `profit_date`) COMMENT '防重复入账，定时任务用INSERT IGNORE或捕获唯一键冲突',
   KEY `idx_user_date` (`user_id`, `profit_date`),
   KEY `idx_status` (`status`),
+  KEY `idx_status_profit_date` (`status`, `profit_date`),
   KEY `idx_commission_generated` (`commission_generated`),
   CONSTRAINT `fk_profit_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_profit_order` FOREIGN KEY (`rental_order_id`) REFERENCES `rental_order` (`id`)
@@ -552,6 +557,7 @@ CREATE TABLE `commission_record` (
   KEY `idx_source_user` (`source_user_id`),
   KEY `idx_source_order` (`source_order_id`),
   KEY `idx_status` (`status`),
+  KEY `idx_status_settled_at` (`status`, `settled_at`),
   CONSTRAINT `fk_commission_benefit_user` FOREIGN KEY (`benefit_user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_commission_source_user` FOREIGN KEY (`source_user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_commission_profit` FOREIGN KEY (`source_profit_id`) REFERENCES `rental_profit_record` (`id`)

@@ -8,12 +8,11 @@ import com.compute.rental.common.enums.RechargeOrderStatus;
 import com.compute.rental.common.enums.RecordSettleStatus;
 import com.compute.rental.common.enums.RentalOrderStatus;
 import com.compute.rental.common.enums.WithdrawOrderStatus;
+import com.compute.rental.common.query.StatusCountRow;
 import com.compute.rental.common.util.DateTimeUtils;
 import com.compute.rental.common.util.MoneyUtils;
-import com.compute.rental.modules.commission.entity.CommissionRecord;
 import com.compute.rental.modules.commission.mapper.CommissionRecordMapper;
 import com.compute.rental.modules.order.entity.RentalOrder;
-import com.compute.rental.modules.order.entity.RentalProfitRecord;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
 import com.compute.rental.modules.order.mapper.RentalProfitRecordMapper;
 import com.compute.rental.modules.user.entity.AppUser;
@@ -21,7 +20,6 @@ import com.compute.rental.modules.user.entity.UserReferralRelation;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.user.mapper.UserReferralRelationMapper;
 import com.compute.rental.modules.wallet.entity.RechargeOrder;
-import com.compute.rental.modules.wallet.entity.UserWallet;
 import com.compute.rental.modules.wallet.entity.WithdrawOrder;
 import com.compute.rental.modules.wallet.mapper.RechargeOrderMapper;
 import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
@@ -37,6 +35,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -147,116 +147,77 @@ public class DashboardService {
     }
 
     private BigDecimal totalRechargeAmount() {
-        return sumRecharge(rechargeOrderMapper.selectList(new LambdaQueryWrapper<RechargeOrder>()
-                .eq(RechargeOrder::getStatus, RechargeOrderStatus.APPROVED.name())));
+        return MoneyUtils.scale(rechargeOrderMapper.sumActualAmountByStatus(RechargeOrderStatus.APPROVED.name()));
     }
 
     private BigDecimal totalWithdrawAmount() {
-        return sumWithdraw(withdrawOrderMapper.selectList(new LambdaQueryWrapper<WithdrawOrder>()
-                .eq(WithdrawOrder::getStatus, WithdrawOrderStatus.PAID.name())));
+        return MoneyUtils.scale(withdrawOrderMapper.sumActualAmountByStatus(WithdrawOrderStatus.PAID.name()));
     }
 
     private BigDecimal totalOrderAmount() {
-        return MoneyUtils.scale(rentalOrderMapper.selectList(new LambdaQueryWrapper<RentalOrder>()
-                        .isNotNull(RentalOrder::getPaidAt))
-                .stream()
-                .map(RentalOrder::getPaidAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        return MoneyUtils.scale(rentalOrderMapper.sumPaidAmount());
     }
 
     private BigDecimal totalProfitAmount() {
-        return MoneyUtils.scale(profitRecordMapper.selectList(new LambdaQueryWrapper<RentalProfitRecord>()
-                        .eq(RentalProfitRecord::getStatus, RecordSettleStatus.SETTLED.name()))
-                .stream()
-                .map(RentalProfitRecord::getFinalProfitAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        return MoneyUtils.scale(profitRecordMapper.sumFinalProfitAmountByStatus(RecordSettleStatus.SETTLED.name()));
     }
 
     private BigDecimal totalCommissionAmount() {
-        return MoneyUtils.scale(commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
-                        .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name()))
-                .stream()
-                .map(CommissionRecord::getCommissionAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        return MoneyUtils.scale(commissionRecordMapper.sumCommissionAmountByStatus(RecordSettleStatus.SETTLED.name()));
     }
 
     private BigDecimal todayRechargeAmount(LocalDate today) {
-        return sumRecharge(rechargeOrderMapper.selectList(new LambdaQueryWrapper<RechargeOrder>()
-                .eq(RechargeOrder::getStatus, RechargeOrderStatus.APPROVED.name())
-                .ge(RechargeOrder::getCreditedAt, today.atStartOfDay())
-                .le(RechargeOrder::getCreditedAt, today.atTime(LocalTime.MAX))));
+        return MoneyUtils.scale(rechargeOrderMapper.sumActualAmountByStatusAndCreditedAtRange(
+                RechargeOrderStatus.APPROVED.name(),
+                today.atStartOfDay(),
+                today.atTime(LocalTime.MAX)));
     }
 
     private BigDecimal todayWithdrawAmount(LocalDate today) {
-        return sumWithdraw(withdrawOrderMapper.selectList(new LambdaQueryWrapper<WithdrawOrder>()
-                .eq(WithdrawOrder::getStatus, WithdrawOrderStatus.PAID.name())
-                .ge(WithdrawOrder::getPaidAt, today.atStartOfDay())
-                .le(WithdrawOrder::getPaidAt, today.atTime(LocalTime.MAX))));
+        return MoneyUtils.scale(withdrawOrderMapper.sumActualAmountByStatusAndPaidAtRange(
+                WithdrawOrderStatus.PAID.name(),
+                today.atStartOfDay(),
+                today.atTime(LocalTime.MAX)));
     }
 
     private BigDecimal todayProfitAmount(LocalDate today) {
-        return MoneyUtils.scale(profitRecordMapper.selectList(new LambdaQueryWrapper<RentalProfitRecord>()
-                        .eq(RentalProfitRecord::getStatus, RecordSettleStatus.SETTLED.name())
-                        .eq(RentalProfitRecord::getProfitDate, today))
-                .stream()
-                .map(RentalProfitRecord::getFinalProfitAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        return MoneyUtils.scale(profitRecordMapper.sumFinalProfitAmountByStatusAndProfitDate(
+                RecordSettleStatus.SETTLED.name(),
+                today));
     }
 
     private BigDecimal todayCommissionAmount(LocalDate today) {
-        return MoneyUtils.scale(commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
-                        .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name())
-                        .ge(CommissionRecord::getSettledAt, today.atStartOfDay())
-                        .le(CommissionRecord::getSettledAt, today.atTime(LocalTime.MAX)))
-                .stream()
-                .map(CommissionRecord::getCommissionAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        return MoneyUtils.scale(commissionRecordMapper.sumCommissionAmountByStatusAndSettledAtRange(
+                RecordSettleStatus.SETTLED.name(),
+                today.atStartOfDay(),
+                today.atTime(LocalTime.MAX)));
     }
 
     private BigDecimal walletAvailableBalance() {
-        return MoneyUtils.scale(userWalletMapper.selectList(new LambdaQueryWrapper<UserWallet>())
-                .stream()
-                .map(UserWallet::getAvailableBalance)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        return MoneyUtils.scale(userWalletMapper.sumAvailableBalance());
     }
 
     private BigDecimal walletFrozenBalance() {
-        return MoneyUtils.scale(userWalletMapper.selectList(new LambdaQueryWrapper<UserWallet>())
-                .stream()
-                .map(UserWallet::getFrozenBalance)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-    }
-
-    private BigDecimal sumRecharge(Iterable<RechargeOrder> orders) {
-        var sum = BigDecimal.ZERO;
-        for (var order : orders) {
-            if (order.getActualAmount() != null) {
-                sum = sum.add(order.getActualAmount());
-            }
-        }
-        return MoneyUtils.scale(sum);
-    }
-
-    private BigDecimal sumWithdraw(Iterable<WithdrawOrder> orders) {
-        var sum = BigDecimal.ZERO;
-        for (var order : orders) {
-            if (order.getActualAmount() != null) {
-                sum = sum.add(order.getActualAmount());
-            }
-        }
-        return MoneyUtils.scale(sum);
+        return MoneyUtils.scale(userWalletMapper.sumFrozenBalance());
     }
 
     private List<DashboardStatusCountResponse> orderStatusCounts() {
-        return Arrays.stream(RentalOrderStatus.values())
-                .map(status -> new DashboardStatusCountResponse(status.name(), countOrdersByStatus(status.name())))
-                .toList();
+        return statusCounts(RentalOrderStatus.values(), rentalOrderMapper.countByOrderStatusGroup());
     }
 
     private List<DashboardStatusCountResponse> profitStatusCounts() {
-        return Arrays.stream(ProfitStatus.values())
-                .map(status -> new DashboardStatusCountResponse(status.name(), rentalOrderMapper.selectCount(
-                        new LambdaQueryWrapper<RentalOrder>().eq(RentalOrder::getProfitStatus, status.name()))))
+        return statusCounts(ProfitStatus.values(), rentalOrderMapper.countByProfitStatusGroup());
+    }
+
+    private List<DashboardStatusCountResponse> statusCounts(Enum<?>[] statuses, List<StatusCountRow> rows) {
+        var counts = rows == null ? Map.<String, Long>of() : rows.stream()
+                .collect(Collectors.toMap(
+                        StatusCountRow::getStatus,
+                        row -> row.getTotal() == null ? 0L : row.getTotal(),
+                        Long::sum
+                ));
+        return Arrays.stream(statuses)
+                .map(status -> new DashboardStatusCountResponse(status.name(), counts.getOrDefault(status.name(), 0L)))
                 .toList();
     }
 
