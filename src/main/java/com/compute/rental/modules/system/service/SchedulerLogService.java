@@ -1,8 +1,12 @@
 package com.compute.rental.modules.system.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.compute.rental.common.enums.SchedulerLogStatus;
+import com.compute.rental.common.page.PageResult;
 import com.compute.rental.common.util.DateTimeUtils;
+import com.compute.rental.modules.system.dto.SchedulerLogResponse;
 import com.compute.rental.modules.system.entity.SchedulerLog;
 import com.compute.rental.modules.system.mapper.SchedulerLogMapper;
 import org.springframework.stereotype.Service;
@@ -44,6 +48,18 @@ public class SchedulerLogService {
                 .set(SchedulerLog::getErrorMessage, trimError(errorMessage)));
     }
 
+    public PageResult<SchedulerLogResponse> pageLogs(long pageNo, long pageSize, String taskName) {
+        var wrapper = new LambdaQueryWrapper<SchedulerLog>()
+                .eq(taskName != null && !taskName.isBlank(), SchedulerLog::getTaskName, taskName)
+                .orderByDesc(SchedulerLog::getStartedAt)
+                .orderByDesc(SchedulerLog::getId);
+        var page = schedulerLogMapper.selectPage(Page.of(pageNo, pageSize), wrapper);
+        var records = page.getRecords().stream()
+                .map(this::toResponse)
+                .toList();
+        return new PageResult<>(records, page.getTotal(), page.getCurrent(), page.getSize());
+    }
+
     private SchedulerLogStatus status(int totalCount, int successCount, int failCount) {
         if (failCount == 0) {
             return SchedulerLogStatus.SUCCESS;
@@ -59,5 +75,19 @@ public class SchedulerLogService {
             return errorMessage;
         }
         return errorMessage.substring(0, MAX_ERROR_LENGTH);
+    }
+
+    private SchedulerLogResponse toResponse(SchedulerLog log) {
+        return new SchedulerLogResponse(
+                log.getId(),
+                log.getTaskName(),
+                log.getStatus(),
+                log.getTotalCount(),
+                log.getSuccessCount(),
+                log.getFailCount(),
+                log.getErrorMessage(),
+                log.getStartedAt(),
+                log.getFinishedAt(),
+                log.getCreatedAt());
     }
 }
