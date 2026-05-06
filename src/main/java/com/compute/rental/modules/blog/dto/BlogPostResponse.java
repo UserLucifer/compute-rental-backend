@@ -36,6 +36,12 @@ public record BlogPostResponse(
         @Schema(description = "Created time")
         LocalDateTime createdAt,
         @Schema(description = "Updated time")
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        @Schema(description = "Actual response locale")
+        String locale,
+        @Schema(description = "Requested locale")
+        String requestedLocale,
+        @Schema(description = "Whether locale fallback was used")
+        Boolean localeFallback
 ) {
 }

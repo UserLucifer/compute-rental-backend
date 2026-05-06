@@ -5,6 +5,8 @@ import com.compute.rental.common.page.PageResult;
 import com.compute.rental.modules.system.dto.AdminNotificationResponse;
 import com.compute.rental.modules.system.dto.NotificationBroadcastRequest;
 import com.compute.rental.modules.system.dto.NotificationCreateRequest;
+import com.compute.rental.modules.system.dto.NotificationTranslationRequest;
+import com.compute.rental.modules.system.dto.NotificationTranslationResponse;
 import com.compute.rental.modules.system.service.AdminLogService;
 import com.compute.rental.modules.system.service.NotificationService;
 import com.compute.rental.security.CurrentUser;
@@ -13,10 +15,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -57,6 +61,26 @@ public class AdminNotificationController {
     @GetMapping("/{id}")
     public ApiResponse<AdminNotificationResponse> notification(@PathVariable Long id) {
         return ApiResponse.success(notificationService.getAdminNotification(id));
+    }
+
+    @Operation(summary = "Admin notification translations")
+    @GetMapping("/{id}/translations")
+    public ApiResponse<List<NotificationTranslationResponse>> translations(@PathVariable Long id) {
+        return ApiResponse.success(notificationService.listNotificationTranslations(id));
+    }
+
+    @Operation(summary = "Update notification translation")
+    @PutMapping("/{id}/translations")
+    public ApiResponse<NotificationTranslationResponse> updateTranslation(
+            @PathVariable Long id,
+            @Valid @RequestBody NotificationTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        var response = notificationService.updateNotificationTranslation(id, request);
+        adminLogService.log(admin.id(), "UPDATE_NOTIFICATION_TRANSLATION", "sys_notification", id,
+                null, null, response.locale(), adminLogService.clientIp(httpRequest));
+        return ApiResponse.success(response);
     }
 
     @Operation(summary = "Create notification")

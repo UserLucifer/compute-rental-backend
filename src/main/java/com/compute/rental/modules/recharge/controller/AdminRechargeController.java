@@ -7,6 +7,8 @@ import com.compute.rental.modules.recharge.dto.AdminRechargeChannelResponse;
 import com.compute.rental.modules.recharge.dto.AdminRejectRechargeRequest;
 import com.compute.rental.modules.recharge.dto.CreateRechargeChannelRequest;
 import com.compute.rental.modules.recharge.dto.RechargeChannelQueryRequest;
+import com.compute.rental.modules.recharge.dto.RechargeChannelTranslationRequest;
+import com.compute.rental.modules.recharge.dto.RechargeChannelTranslationResponse;
 import com.compute.rental.modules.recharge.dto.RechargeOrderQueryRequest;
 import com.compute.rental.modules.recharge.dto.RechargeOrderResponse;
 import com.compute.rental.modules.recharge.dto.UpdateRechargeChannelRequest;
@@ -17,6 +19,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -73,6 +76,26 @@ public class AdminRechargeController {
         var response = rechargeService.updateChannel(id, request);
         adminLogService.log(admin.id(), "UPDATE_RECHARGE_CHANNEL", "recharge_channel", id,
                 null, null, response.channelCode(), adminLogService.clientIp(httpRequest));
+        return ApiResponse.success(response);
+    }
+
+    @Operation(summary = "Admin recharge channel translations")
+    @GetMapping("/channels/{id}/translations")
+    public ApiResponse<List<RechargeChannelTranslationResponse>> channelTranslations(@PathVariable Long id) {
+        return ApiResponse.success(rechargeService.listChannelTranslations(id));
+    }
+
+    @Operation(summary = "Update recharge channel translation")
+    @PutMapping("/channels/{id}/translations")
+    public ApiResponse<RechargeChannelTranslationResponse> updateChannelTranslation(
+            @PathVariable Long id,
+            @Valid @RequestBody RechargeChannelTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        var response = rechargeService.updateChannelTranslation(id, request);
+        adminLogService.log(admin.id(), "UPDATE_RECHARGE_CHANNEL_TRANSLATION", "recharge_channel", id,
+                null, null, response.locale(), adminLogService.clientIp(httpRequest));
         return ApiResponse.success(response);
     }
 

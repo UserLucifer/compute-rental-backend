@@ -8,6 +8,7 @@ import com.compute.rental.common.enums.ErrorCode;
 import com.compute.rental.common.enums.RechargeOrderStatus;
 import com.compute.rental.common.enums.WalletBusinessType;
 import com.compute.rental.common.exception.BusinessException;
+import com.compute.rental.common.i18n.LanguageResolver;
 import com.compute.rental.common.page.PageResult;
 import com.compute.rental.common.util.DateTimeUtils;
 import com.compute.rental.common.util.MoneyUtils;
@@ -21,6 +22,8 @@ import com.compute.rental.modules.recharge.dto.CreateRechargeChannelRequest;
 import com.compute.rental.modules.recharge.dto.CreateRechargeOrderRequest;
 import com.compute.rental.modules.recharge.dto.RechargeChannelQueryRequest;
 import com.compute.rental.modules.recharge.dto.RechargeChannelResponse;
+import com.compute.rental.modules.recharge.dto.RechargeChannelTranslationRequest;
+import com.compute.rental.modules.recharge.dto.RechargeChannelTranslationResponse;
 import com.compute.rental.modules.recharge.dto.RechargeOrderQueryRequest;
 import com.compute.rental.modules.recharge.dto.RechargeOrderResponse;
 import com.compute.rental.modules.recharge.dto.UpdateRechargeChannelRequest;
@@ -29,20 +32,26 @@ import com.compute.rental.modules.system.service.SysConfigService;
 import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.wallet.entity.RechargeChannel;
+import com.compute.rental.modules.wallet.entity.RechargeChannelTranslation;
 import com.compute.rental.modules.wallet.entity.RechargeOrder;
 import com.compute.rental.modules.wallet.entity.UserWallet;
 import com.compute.rental.modules.wallet.mapper.RechargeChannelMapper;
+import com.compute.rental.modules.wallet.mapper.RechargeChannelTranslationMapper;
 import com.compute.rental.modules.wallet.mapper.RechargeOrderMapper;
 import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +67,7 @@ public class RechargeService {
     private static final Duration RECHARGE_OPERATION_LOCK_TTL = Duration.ofMinutes(1);
 
     private final RechargeChannelMapper rechargeChannelMapper;
+    private final RechargeChannelTranslationMapper rechargeChannelTranslationMapper;
     private final RechargeOrderMapper rechargeOrderMapper;
     private final UserWalletMapper userWalletMapper;
     private final AppUserMapper appUserMapper;
@@ -67,6 +77,7 @@ public class RechargeService {
 
     public RechargeService(
             RechargeChannelMapper rechargeChannelMapper,
+            RechargeChannelTranslationMapper rechargeChannelTranslationMapper,
             RechargeOrderMapper rechargeOrderMapper,
             UserWalletMapper userWalletMapper,
             AppUserMapper appUserMapper,
@@ -75,6 +86,7 @@ public class RechargeService {
             RedisLockClient redisLockClient
     ) {
         this.rechargeChannelMapper = rechargeChannelMapper;
+        this.rechargeChannelTranslationMapper = rechargeChannelTranslationMapper;
         this.rechargeOrderMapper = rechargeOrderMapper;
         this.userWalletMapper = userWalletMapper;
         this.appUserMapper = appUserMapper;
@@ -84,12 +96,18 @@ public class RechargeService {
     }
 
     public List<RechargeChannelResponse> listEnabledChannels() {
-        return rechargeChannelMapper.selectList(new LambdaQueryWrapper<RechargeChannel>()
+        return listEnabledChannels(LanguageResolver.DEFAULT_LANGUAGE);
+    }
+
+    public List<RechargeChannelResponse> listEnabledChannels(String locale) {
+        var channels = rechargeChannelMapper.selectList(new LambdaQueryWrapper<RechargeChannel>()
                         .eq(RechargeChannel::getStatus, CommonStatus.ENABLED.value())
                         .orderByAsc(RechargeChannel::getSortNo)
-                        .orderByDesc(RechargeChannel::getId))
+                        .orderByDesc(RechargeChannel::getId));
+        var translations = rechargeChannelTranslationMap(channels.stream().map(RechargeChannel::getId).toList(), locale);
+        return channels
                 .stream()
-                .map(this::toChannelResponse)
+                .map(channel -> toChannelResponse(channel, translations.get(channel.getId()), locale))
                 .toList();
     }
 
@@ -104,6 +122,45 @@ public class RechargeService {
                 .map(this::toAdminChannelResponse)
                 .toList(),
                 result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
+    public List<RechargeChannelTranslationResponse> listChannelTranslations(Long channelId) {
+        var channel = requireChannel(channelId);
+        var translations = rechargeChannelTranslationMap(List.of(channelId), LanguageResolver.EN_US);
+        return List.of(
+                new RechargeChannelTranslationResponse(
+                        channelId,
+                        LanguageResolver.DEFAULT_LANGUAGE,
+                        channel.getChannelName(),
+                        channel.getAccountName(),
+                        true,
+                        channel.getCreatedAt(),
+                        channel.getUpdatedAt()
+                ),
+                rechargeChannelTranslationResponse(channelId, LanguageResolver.EN_US, translations.get(channelId))
+        );
+    }
+
+    @Transactional
+    public RechargeChannelTranslationResponse updateChannelTranslation(
+            Long channelId,
+            RechargeChannelTranslationRequest request
+    ) {
+        var channel = requireChannel(channelId);
+        var locale = requireSupportedLocale(request.locale());
+        var channelName = trimToNull(request.channelName());
+        var accountName = trimToNull(request.accountName());
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(locale)) {
+            rechargeChannelMapper.update(null, new LambdaUpdateWrapper<RechargeChannel>()
+                    .eq(RechargeChannel::getId, channelId)
+                    .set(RechargeChannel::getChannelName, channelName == null ? channel.getChannelName() : channelName)
+                    .set(RechargeChannel::getAccountName, accountName == null ? channel.getAccountName() : accountName)
+                    .set(RechargeChannel::getUpdatedAt, DateTimeUtils.now()));
+            channel.setChannelName(channelName == null ? channel.getChannelName() : channelName);
+            channel.setAccountName(accountName == null ? channel.getAccountName() : accountName);
+        }
+        return upsertRechargeChannelTranslation(channelId, locale, channel.getChannelName(), channel.getAccountName(),
+                channelName, accountName);
     }
 
     @Transactional
@@ -446,18 +503,34 @@ public class RechargeService {
     }
 
     private RechargeChannelResponse toChannelResponse(RechargeChannel channel) {
+        return toChannelResponse(channel, null, LanguageResolver.DEFAULT_LANGUAGE);
+    }
+
+    private RechargeChannelResponse toChannelResponse(
+            RechargeChannel channel,
+            RechargeChannelTranslation translation,
+            String requestedLocale
+    ) {
+        var channelName = localized(channel.getChannelName(), requestedLocale,
+                translation == null ? null : translation.getChannelName());
+        var accountName = localized(channel.getAccountName(), requestedLocale,
+                translation == null ? null : translation.getAccountName());
+        var localeFallback = channelName.fallback() || accountName.fallback();
         return new RechargeChannelResponse(
                 channel.getId(),
                 channel.getChannelCode(),
-                channel.getChannelName(),
+                channelName.value(),
                 channel.getNetwork(),
                 channel.getDisplayUrl(),
-                channel.getAccountName(),
+                accountName.value(),
                 channel.getAccountNo(),
                 channel.getMinAmount(),
                 channel.getMaxAmount(),
                 channel.getFeeRate(),
-                channel.getSortNo()
+                channel.getSortNo(),
+                localeFallback ? LanguageResolver.DEFAULT_LANGUAGE : requestedLocale,
+                requestedLocale,
+                localeFallback
         );
     }
 
@@ -550,6 +623,88 @@ public class RechargeService {
         return userNames;
     }
 
+    private Map<Long, RechargeChannelTranslation> rechargeChannelTranslationMap(Collection<Long> ids, String locale) {
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(locale) || ids.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return rechargeChannelTranslationMapper.selectList(new LambdaQueryWrapper<RechargeChannelTranslation>()
+                        .in(RechargeChannelTranslation::getChannelId, ids)
+                        .eq(RechargeChannelTranslation::getLocale, locale))
+                .stream()
+                .collect(Collectors.toMap(RechargeChannelTranslation::getChannelId, Function.identity()));
+    }
+
+    private RechargeChannelTranslationResponse upsertRechargeChannelTranslation(
+            Long channelId,
+            String locale,
+            String defaultChannelName,
+            String defaultAccountName,
+            String channelName,
+            String accountName
+    ) {
+        var existing = rechargeChannelTranslationMapper.selectOne(new LambdaQueryWrapper<RechargeChannelTranslation>()
+                .eq(RechargeChannelTranslation::getChannelId, channelId)
+                .eq(RechargeChannelTranslation::getLocale, locale)
+                .last("LIMIT 1"));
+        var now = DateTimeUtils.now();
+        var translation = existing == null ? new RechargeChannelTranslation() : existing;
+        translation.setChannelId(channelId);
+        translation.setLocale(locale);
+        translation.setChannelName(channelName == null && LanguageResolver.DEFAULT_LANGUAGE.equals(locale)
+                ? defaultChannelName : channelName);
+        translation.setAccountName(accountName == null && LanguageResolver.DEFAULT_LANGUAGE.equals(locale)
+                ? defaultAccountName : accountName);
+        if (existing == null) {
+            translation.setCreatedAt(now);
+            translation.setUpdatedAt(now);
+            rechargeChannelTranslationMapper.insert(translation);
+        } else {
+            translation.setUpdatedAt(now);
+            rechargeChannelTranslationMapper.updateById(translation);
+        }
+        return rechargeChannelTranslationResponse(channelId, locale, translation);
+    }
+
+    private RechargeChannelTranslationResponse rechargeChannelTranslationResponse(
+            Long channelId,
+            String locale,
+            RechargeChannelTranslation translation
+    ) {
+        var configured = translation != null
+                && (StringUtils.hasText(translation.getChannelName())
+                || StringUtils.hasText(translation.getAccountName()));
+        return new RechargeChannelTranslationResponse(
+                channelId,
+                locale,
+                translation == null ? null : translation.getChannelName(),
+                translation == null ? null : translation.getAccountName(),
+                configured,
+                translation == null ? null : translation.getCreatedAt(),
+                translation == null ? null : translation.getUpdatedAt()
+        );
+    }
+
+    private String requireSupportedLocale(String locale) {
+        var normalized = StringUtils.hasText(locale) ? locale.trim().replace('_', '-') : null;
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(normalized) || LanguageResolver.EN_US.equals(normalized)) {
+            return normalized;
+        }
+        throw new BusinessException(ErrorCode.BAD_REQUEST, "Unsupported locale: " + locale);
+    }
+
+    private LocalizedText localized(String defaultValue, String requestedLocale, String translatedValue) {
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(requestedLocale)) {
+            return new LocalizedText(defaultValue, requestedLocale, false);
+        }
+        if (StringUtils.hasText(translatedValue)) {
+            return new LocalizedText(translatedValue, requestedLocale, false);
+        }
+        if (!StringUtils.hasText(defaultValue)) {
+            return new LocalizedText(defaultValue, requestedLocale, false);
+        }
+        return new LocalizedText(defaultValue, LanguageResolver.DEFAULT_LANGUAGE, true);
+    }
+
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
@@ -557,5 +712,8 @@ public class RechargeService {
     private String generateRechargeNo() {
         return "RC" + DateTimeUtils.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
+    }
+
+    private record LocalizedText(String value, String locale, boolean fallback) {
     }
 }

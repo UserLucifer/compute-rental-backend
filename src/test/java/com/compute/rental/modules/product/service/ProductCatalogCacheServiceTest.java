@@ -47,19 +47,21 @@ class ProductCatalogCacheServiceTest {
 
     @Test
     void getShouldDeserializeCachedJson() {
-        var key = RedisKeys.catalogRegions();
+        var key = RedisKeys.catalogRegions("zh-CN");
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(key)).thenReturn("[{\"id\":1,\"regionCode\":\"HK\",\"regionName\":\"Hong Kong\"}]");
+        when(valueOperations.get(key)).thenReturn("""
+                [{"id":1,"regionCode":"HK","regionName":"Hong Kong","locale":"zh-CN","requestedLocale":"zh-CN","localeFallback":false}]
+                """);
 
         var result = service.get(key, new TypeReference<List<RegionResponse>>() {
         });
 
-        assertThat(result).containsExactly(new RegionResponse(1L, "HK", "Hong Kong"));
+        assertThat(result).containsExactly(new RegionResponse(1L, "HK", "Hong Kong", "zh-CN", "zh-CN", false));
     }
 
     @Test
     void getShouldReturnNullWhenRedisFails() {
-        var key = RedisKeys.catalogRegions();
+        var key = RedisKeys.catalogRegions("zh-CN");
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get(key)).thenThrow(new IllegalStateException("redis down"));
 
@@ -71,13 +73,13 @@ class ProductCatalogCacheServiceTest {
 
     @Test
     void putShouldSerializeValueWithTtl() {
-        var key = RedisKeys.catalogRegions();
-        var value = List.of(new RegionResponse(1L, "HK", "Hong Kong"));
+        var key = RedisKeys.catalogRegions("zh-CN");
+        var value = List.of(new RegionResponse(1L, "HK", "Hong Kong", "zh-CN", "zh-CN", false));
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
         service.put(key, value);
 
-        verify(valueOperations).set(eq(key), eq("[{\"id\":1,\"regionCode\":\"HK\",\"regionName\":\"Hong Kong\"}]"),
+        verify(valueOperations).set(eq(key), eq("[{\"id\":1,\"regionCode\":\"HK\",\"regionName\":\"Hong Kong\",\"locale\":\"zh-CN\",\"requestedLocale\":\"zh-CN\",\"localeFallback\":false}]"),
                 eq(Duration.ofMinutes(5)));
     }
 

@@ -25,31 +25,31 @@ public final class RedisKeys {
         return SYS_CONFIG_CACHE_PREFIX + configKey;
     }
 
-    public static String catalogRegions() {
-        return CATALOG_CACHE_PREFIX + "regions";
+    public static String catalogRegions(String locale) {
+        return CATALOG_CACHE_PREFIX + "regions:" + locale;
     }
 
-    public static String catalogGpuModels(Long regionId) {
-        return CATALOG_CACHE_PREFIX + "gpu-models:" + (regionId == null ? "all" : "region:" + regionId);
+    public static String catalogGpuModels(Long regionId, String locale) {
+        return CATALOG_CACHE_PREFIX + "gpu-models:" + locale + ":" + (regionId == null ? "all" : "region:" + regionId);
     }
 
-    public static String catalogProductPage(long current, long size, Long regionId, Long gpuModelId) {
-        return CATALOG_CACHE_PREFIX + "products:page:" + current
+    public static String catalogProductPage(long current, long size, Long regionId, Long gpuModelId, String locale) {
+        return CATALOG_CACHE_PREFIX + "products:" + locale + ":page:" + current
                 + ":size:" + size
                 + ":region:" + (regionId == null ? "all" : regionId)
                 + ":gpu:" + (gpuModelId == null ? "all" : gpuModelId);
     }
 
-    public static String catalogProduct(String productCode) {
-        return CATALOG_CACHE_PREFIX + "product:" + productCode;
+    public static String catalogProduct(String productCode, String locale) {
+        return CATALOG_CACHE_PREFIX + "product:" + locale + ":" + productCode;
     }
 
-    public static String catalogAiModels() {
-        return CATALOG_CACHE_PREFIX + "ai-models";
+    public static String catalogAiModels(String locale) {
+        return CATALOG_CACHE_PREFIX + "ai-models:" + locale;
     }
 
-    public static String catalogCycleRules() {
-        return CATALOG_CACHE_PREFIX + "cycle-rules";
+    public static String catalogCycleRules(String locale) {
+        return CATALOG_CACHE_PREFIX + "cycle-rules:" + locale;
     }
 
     public static String orderOperationLock(String orderNo, String operation) {

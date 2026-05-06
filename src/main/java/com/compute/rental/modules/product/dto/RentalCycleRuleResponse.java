@@ -8,6 +8,9 @@ public record RentalCycleRuleResponse(
         String cycleName,
         Integer cycleDays,
         BigDecimal yieldMultiplier,
-        BigDecimal earlyPenaltyRate
+        BigDecimal earlyPenaltyRate,
+        String locale,
+        String requestedLocale,
+        Boolean localeFallback
 ) {
 }

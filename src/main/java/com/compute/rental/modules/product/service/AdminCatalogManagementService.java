@@ -6,8 +6,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.compute.rental.common.enums.CommonStatus;
 import com.compute.rental.common.enums.ErrorCode;
 import com.compute.rental.common.exception.BusinessException;
+import com.compute.rental.common.i18n.LanguageResolver;
 import com.compute.rental.common.page.PageResult;
 import com.compute.rental.common.util.DateTimeUtils;
+import com.compute.rental.modules.product.dto.AiModelTranslationRequest;
+import com.compute.rental.modules.product.dto.AiModelTranslationResponse;
 import com.compute.rental.modules.product.dto.AdminAiModelRequest;
 import com.compute.rental.modules.product.dto.AdminAiModelResponse;
 import com.compute.rental.modules.product.dto.AdminGpuModelRequest;
@@ -18,16 +21,34 @@ import com.compute.rental.modules.product.dto.AdminRegionRequest;
 import com.compute.rental.modules.product.dto.AdminRegionResponse;
 import com.compute.rental.modules.product.dto.AdminRentalCycleRuleRequest;
 import com.compute.rental.modules.product.dto.AdminRentalCycleRuleResponse;
+import com.compute.rental.modules.product.dto.GpuModelTranslationRequest;
+import com.compute.rental.modules.product.dto.GpuModelTranslationResponse;
+import com.compute.rental.modules.product.dto.ProductTranslationRequest;
+import com.compute.rental.modules.product.dto.ProductTranslationResponse;
+import com.compute.rental.modules.product.dto.RegionTranslationRequest;
+import com.compute.rental.modules.product.dto.RegionTranslationResponse;
+import com.compute.rental.modules.product.dto.RentalCycleRuleTranslationRequest;
+import com.compute.rental.modules.product.dto.RentalCycleRuleTranslationResponse;
 import com.compute.rental.modules.product.entity.AiModel;
+import com.compute.rental.modules.product.entity.AiModelTranslation;
 import com.compute.rental.modules.product.entity.GpuModel;
+import com.compute.rental.modules.product.entity.GpuModelTranslation;
 import com.compute.rental.modules.product.entity.Product;
+import com.compute.rental.modules.product.entity.ProductTranslation;
 import com.compute.rental.modules.product.entity.Region;
+import com.compute.rental.modules.product.entity.RegionTranslation;
 import com.compute.rental.modules.product.entity.RentalCycleRule;
+import com.compute.rental.modules.product.entity.RentalCycleRuleTranslation;
 import com.compute.rental.modules.product.mapper.AiModelMapper;
+import com.compute.rental.modules.product.mapper.AiModelTranslationMapper;
 import com.compute.rental.modules.product.mapper.GpuModelMapper;
+import com.compute.rental.modules.product.mapper.GpuModelTranslationMapper;
 import com.compute.rental.modules.product.mapper.ProductMapper;
+import com.compute.rental.modules.product.mapper.ProductTranslationMapper;
 import com.compute.rental.modules.product.mapper.RegionMapper;
+import com.compute.rental.modules.product.mapper.RegionTranslationMapper;
 import com.compute.rental.modules.product.mapper.RentalCycleRuleMapper;
+import com.compute.rental.modules.product.mapper.RentalCycleRuleTranslationMapper;
 import com.compute.rental.modules.system.service.AdminLogService;
 import java.util.Collections;
 import java.util.List;
@@ -48,6 +69,11 @@ public class AdminCatalogManagementService {
     private final ProductMapper productMapper;
     private final AiModelMapper aiModelMapper;
     private final RentalCycleRuleMapper rentalCycleRuleMapper;
+    private final RegionTranslationMapper regionTranslationMapper;
+    private final GpuModelTranslationMapper gpuModelTranslationMapper;
+    private final ProductTranslationMapper productTranslationMapper;
+    private final AiModelTranslationMapper aiModelTranslationMapper;
+    private final RentalCycleRuleTranslationMapper rentalCycleRuleTranslationMapper;
     private final AdminLogService adminLogService;
     private final ProductCatalogCacheService productCatalogCacheService;
 
@@ -57,6 +83,11 @@ public class AdminCatalogManagementService {
             ProductMapper productMapper,
             AiModelMapper aiModelMapper,
             RentalCycleRuleMapper rentalCycleRuleMapper,
+            RegionTranslationMapper regionTranslationMapper,
+            GpuModelTranslationMapper gpuModelTranslationMapper,
+            ProductTranslationMapper productTranslationMapper,
+            AiModelTranslationMapper aiModelTranslationMapper,
+            RentalCycleRuleTranslationMapper rentalCycleRuleTranslationMapper,
             AdminLogService adminLogService,
             ProductCatalogCacheService productCatalogCacheService
     ) {
@@ -65,6 +96,11 @@ public class AdminCatalogManagementService {
         this.productMapper = productMapper;
         this.aiModelMapper = aiModelMapper;
         this.rentalCycleRuleMapper = rentalCycleRuleMapper;
+        this.regionTranslationMapper = regionTranslationMapper;
+        this.gpuModelTranslationMapper = gpuModelTranslationMapper;
+        this.productTranslationMapper = productTranslationMapper;
+        this.aiModelTranslationMapper = aiModelTranslationMapper;
+        this.rentalCycleRuleTranslationMapper = rentalCycleRuleTranslationMapper;
         this.adminLogService = adminLogService;
         this.productCatalogCacheService = productCatalogCacheService;
     }
@@ -119,6 +155,41 @@ public class AdminCatalogManagementService {
         return toAdminRegionResponse(requireRegion(id));
     }
 
+    public List<RegionTranslationResponse> listRegionTranslations(Long id) {
+        var region = requireRegion(id);
+        var english = regionTranslation(id, LanguageResolver.EN_US);
+        return List.of(
+                new RegionTranslationResponse(id, LanguageResolver.DEFAULT_LANGUAGE, region.getRegionName(), true,
+                        region.getCreatedAt(), region.getUpdatedAt()),
+                regionTranslationResponse(id, LanguageResolver.EN_US, english)
+        );
+    }
+
+    @Transactional
+    public RegionTranslationResponse updateRegionTranslation(
+            Long id,
+            RegionTranslationRequest request,
+            Long adminId,
+            String ip
+    ) {
+        var region = requireRegion(id);
+        var locale = requireSupportedLocale(request.locale());
+        var regionName = trimToNull(request.regionName());
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(locale) && regionName != null) {
+            var now = DateTimeUtils.now();
+            regionMapper.update(null, new LambdaUpdateWrapper<Region>()
+                    .eq(Region::getId, id)
+                    .set(Region::getRegionName, regionName)
+                    .set(Region::getUpdatedAt, now));
+            region.setRegionName(regionName);
+            region.setUpdatedAt(now);
+        }
+        var response = upsertRegionTranslation(id, locale, region.getRegionName(), regionName);
+        log(adminId, "UPDATE_REGION_TRANSLATION", "region", id, response.locale(), ip);
+        evictCatalogCacheAfterCommit();
+        return response;
+    }
+
     public PageResult<AdminGpuModelResponse> pageGpuModels(long pageNo, long pageSize, String modelCode, Integer status) {
         var page = new Page<GpuModel>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<GpuModel>()
@@ -167,6 +238,41 @@ public class AdminCatalogManagementService {
         log(adminId, statusAction("GPU_MODEL", status), "gpu_model", id, "status=" + status, ip);
         evictCatalogCacheAfterCommit();
         return toAdminGpuModelResponse(requireGpuModel(id));
+    }
+
+    public List<GpuModelTranslationResponse> listGpuModelTranslations(Long id) {
+        var model = requireGpuModel(id);
+        var english = gpuModelTranslation(id, LanguageResolver.EN_US);
+        return List.of(
+                new GpuModelTranslationResponse(id, LanguageResolver.DEFAULT_LANGUAGE, model.getModelName(), true,
+                        model.getCreatedAt(), model.getUpdatedAt()),
+                gpuModelTranslationResponse(id, LanguageResolver.EN_US, english)
+        );
+    }
+
+    @Transactional
+    public GpuModelTranslationResponse updateGpuModelTranslation(
+            Long id,
+            GpuModelTranslationRequest request,
+            Long adminId,
+            String ip
+    ) {
+        var model = requireGpuModel(id);
+        var locale = requireSupportedLocale(request.locale());
+        var modelName = trimToNull(request.modelName());
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(locale) && modelName != null) {
+            var now = DateTimeUtils.now();
+            gpuModelMapper.update(null, new LambdaUpdateWrapper<GpuModel>()
+                    .eq(GpuModel::getId, id)
+                    .set(GpuModel::getModelName, modelName)
+                    .set(GpuModel::getUpdatedAt, now));
+            model.setModelName(modelName);
+            model.setUpdatedAt(now);
+        }
+        var response = upsertGpuModelTranslation(id, locale, model.getModelName(), modelName);
+        log(adminId, "UPDATE_GPU_MODEL_TRANSLATION", "gpu_model", id, response.locale(), ip);
+        evictCatalogCacheAfterCommit();
+        return response;
     }
 
     public PageResult<AdminProductResponse> pageProducts(long pageNo, long pageSize, String productCode,
@@ -238,6 +344,41 @@ public class AdminCatalogManagementService {
         return getProduct(productCode);
     }
 
+    public List<ProductTranslationResponse> listProductTranslations(String productCode) {
+        var product = requireProduct(productCode);
+        var english = productTranslation(product.getId(), LanguageResolver.EN_US);
+        return List.of(
+                new ProductTranslationResponse(product.getId(), productCode, LanguageResolver.DEFAULT_LANGUAGE,
+                        product.getProductName(), true, product.getCreatedAt(), product.getUpdatedAt()),
+                productTranslationResponse(product, LanguageResolver.EN_US, english)
+        );
+    }
+
+    @Transactional
+    public ProductTranslationResponse updateProductTranslation(
+            String productCode,
+            ProductTranslationRequest request,
+            Long adminId,
+            String ip
+    ) {
+        var product = requireProduct(productCode);
+        var locale = requireSupportedLocale(request.locale());
+        var productName = trimToNull(request.productName());
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(locale) && productName != null) {
+            var now = DateTimeUtils.now();
+            productMapper.update(null, new LambdaUpdateWrapper<Product>()
+                    .eq(Product::getId, product.getId())
+                    .set(Product::getProductName, productName)
+                    .set(Product::getUpdatedAt, now));
+            product.setProductName(productName);
+            product.setUpdatedAt(now);
+        }
+        var response = upsertProductTranslation(product, locale, product.getProductName(), productName);
+        log(adminId, "UPDATE_PRODUCT_TRANSLATION", "product", product.getId(), response.locale(), ip);
+        evictCatalogCacheAfterCommit();
+        return response;
+    }
+
     public PageResult<AdminAiModelResponse> pageAiModels(long pageNo, long pageSize, String modelCode, Integer status) {
         var page = new Page<AiModel>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<AiModel>()
@@ -289,6 +430,45 @@ public class AdminCatalogManagementService {
         return toAdminAiModelResponse(requireAiModel(modelCode));
     }
 
+    public List<AiModelTranslationResponse> listAiModelTranslations(String modelCode) {
+        var model = requireAiModel(modelCode);
+        var english = aiModelTranslation(model.getId(), LanguageResolver.EN_US);
+        return List.of(
+                new AiModelTranslationResponse(model.getId(), modelCode, LanguageResolver.DEFAULT_LANGUAGE,
+                        model.getModelName(), model.getVendorName(), true, model.getCreatedAt(), model.getUpdatedAt()),
+                aiModelTranslationResponse(model, LanguageResolver.EN_US, english)
+        );
+    }
+
+    @Transactional
+    public AiModelTranslationResponse updateAiModelTranslation(
+            String modelCode,
+            AiModelTranslationRequest request,
+            Long adminId,
+            String ip
+    ) {
+        var model = requireAiModel(modelCode);
+        var locale = requireSupportedLocale(request.locale());
+        var modelName = trimToNull(request.modelName());
+        var vendorName = trimToNull(request.vendorName());
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(locale) && (modelName != null || vendorName != null)) {
+            var now = DateTimeUtils.now();
+            aiModelMapper.update(null, new LambdaUpdateWrapper<AiModel>()
+                    .eq(AiModel::getId, model.getId())
+                    .set(AiModel::getModelName, modelName == null ? model.getModelName() : modelName)
+                    .set(AiModel::getVendorName, vendorName == null ? model.getVendorName() : vendorName)
+                    .set(AiModel::getUpdatedAt, now));
+            model.setModelName(modelName == null ? model.getModelName() : modelName);
+            model.setVendorName(vendorName == null ? model.getVendorName() : vendorName);
+            model.setUpdatedAt(now);
+        }
+        var response = upsertAiModelTranslation(model, locale, model.getModelName(), model.getVendorName(),
+                modelName, vendorName);
+        log(adminId, "UPDATE_AI_MODEL_TRANSLATION", "ai_model", model.getId(), response.locale(), ip);
+        evictCatalogCacheAfterCommit();
+        return response;
+    }
+
     public PageResult<AdminRentalCycleRuleResponse> pageCycleRules(long pageNo, long pageSize, String cycleCode, Integer status) {
         var page = new Page<RentalCycleRule>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<RentalCycleRule>()
@@ -338,6 +518,258 @@ public class AdminCatalogManagementService {
         log(adminId, statusAction("RENTAL_CYCLE_RULE", status), "rental_cycle_rule", rule.getId(), "status=" + status, ip);
         evictCatalogCacheAfterCommit();
         return toAdminRentalCycleRuleResponse(requireCycleRule(cycleCode));
+    }
+
+    public List<RentalCycleRuleTranslationResponse> listCycleRuleTranslations(String cycleCode) {
+        var rule = requireCycleRule(cycleCode);
+        var english = rentalCycleRuleTranslation(rule.getId(), LanguageResolver.EN_US);
+        return List.of(
+                new RentalCycleRuleTranslationResponse(rule.getId(), cycleCode, LanguageResolver.DEFAULT_LANGUAGE,
+                        rule.getCycleName(), true, rule.getCreatedAt(), rule.getUpdatedAt()),
+                rentalCycleRuleTranslationResponse(rule, LanguageResolver.EN_US, english)
+        );
+    }
+
+    @Transactional
+    public RentalCycleRuleTranslationResponse updateCycleRuleTranslation(
+            String cycleCode,
+            RentalCycleRuleTranslationRequest request,
+            Long adminId,
+            String ip
+    ) {
+        var rule = requireCycleRule(cycleCode);
+        var locale = requireSupportedLocale(request.locale());
+        var cycleName = trimToNull(request.cycleName());
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(locale) && cycleName != null) {
+            var now = DateTimeUtils.now();
+            rentalCycleRuleMapper.update(null, new LambdaUpdateWrapper<RentalCycleRule>()
+                    .eq(RentalCycleRule::getId, rule.getId())
+                    .set(RentalCycleRule::getCycleName, cycleName)
+                    .set(RentalCycleRule::getUpdatedAt, now));
+            rule.setCycleName(cycleName);
+            rule.setUpdatedAt(now);
+        }
+        var response = upsertRentalCycleRuleTranslation(rule, locale, rule.getCycleName(), cycleName);
+        log(adminId, "UPDATE_RENTAL_CYCLE_RULE_TRANSLATION", "rental_cycle_rule", rule.getId(),
+                response.locale(), ip);
+        evictCatalogCacheAfterCommit();
+        return response;
+    }
+
+    private RegionTranslation regionTranslation(Long regionId, String locale) {
+        return regionTranslationMapper.selectOne(new LambdaQueryWrapper<RegionTranslation>()
+                .eq(RegionTranslation::getRegionId, regionId)
+                .eq(RegionTranslation::getLocale, locale)
+                .last("LIMIT 1"));
+    }
+
+    private GpuModelTranslation gpuModelTranslation(Long gpuModelId, String locale) {
+        return gpuModelTranslationMapper.selectOne(new LambdaQueryWrapper<GpuModelTranslation>()
+                .eq(GpuModelTranslation::getGpuModelId, gpuModelId)
+                .eq(GpuModelTranslation::getLocale, locale)
+                .last("LIMIT 1"));
+    }
+
+    private ProductTranslation productTranslation(Long productId, String locale) {
+        return productTranslationMapper.selectOne(new LambdaQueryWrapper<ProductTranslation>()
+                .eq(ProductTranslation::getProductId, productId)
+                .eq(ProductTranslation::getLocale, locale)
+                .last("LIMIT 1"));
+    }
+
+    private AiModelTranslation aiModelTranslation(Long aiModelId, String locale) {
+        return aiModelTranslationMapper.selectOne(new LambdaQueryWrapper<AiModelTranslation>()
+                .eq(AiModelTranslation::getAiModelId, aiModelId)
+                .eq(AiModelTranslation::getLocale, locale)
+                .last("LIMIT 1"));
+    }
+
+    private RentalCycleRuleTranslation rentalCycleRuleTranslation(Long cycleRuleId, String locale) {
+        return rentalCycleRuleTranslationMapper.selectOne(new LambdaQueryWrapper<RentalCycleRuleTranslation>()
+                .eq(RentalCycleRuleTranslation::getCycleRuleId, cycleRuleId)
+                .eq(RentalCycleRuleTranslation::getLocale, locale)
+                .last("LIMIT 1"));
+    }
+
+    private RegionTranslationResponse upsertRegionTranslation(
+            Long regionId,
+            String locale,
+            String defaultRegionName,
+            String regionName
+    ) {
+        var now = DateTimeUtils.now();
+        var translation = regionTranslation(regionId, locale);
+        if (translation == null) {
+            translation = new RegionTranslation();
+            translation.setRegionId(regionId);
+            translation.setLocale(locale);
+            translation.setRegionName(regionName == null ? defaultRegionName : regionName);
+            translation.setCreatedAt(now);
+            translation.setUpdatedAt(now);
+            regionTranslationMapper.insert(translation);
+        } else {
+            translation.setRegionName(regionName == null ? translation.getRegionName() : regionName);
+            translation.setUpdatedAt(now);
+            regionTranslationMapper.updateById(translation);
+        }
+        return regionTranslationResponse(regionId, locale, translation);
+    }
+
+    private GpuModelTranslationResponse upsertGpuModelTranslation(
+            Long gpuModelId,
+            String locale,
+            String defaultModelName,
+            String modelName
+    ) {
+        var now = DateTimeUtils.now();
+        var translation = gpuModelTranslation(gpuModelId, locale);
+        if (translation == null) {
+            translation = new GpuModelTranslation();
+            translation.setGpuModelId(gpuModelId);
+            translation.setLocale(locale);
+            translation.setModelName(modelName == null ? defaultModelName : modelName);
+            translation.setCreatedAt(now);
+            translation.setUpdatedAt(now);
+            gpuModelTranslationMapper.insert(translation);
+        } else {
+            translation.setModelName(modelName == null ? translation.getModelName() : modelName);
+            translation.setUpdatedAt(now);
+            gpuModelTranslationMapper.updateById(translation);
+        }
+        return gpuModelTranslationResponse(gpuModelId, locale, translation);
+    }
+
+    private ProductTranslationResponse upsertProductTranslation(
+            Product product,
+            String locale,
+            String defaultProductName,
+            String productName
+    ) {
+        var now = DateTimeUtils.now();
+        var translation = productTranslation(product.getId(), locale);
+        if (translation == null) {
+            translation = new ProductTranslation();
+            translation.setProductId(product.getId());
+            translation.setLocale(locale);
+            translation.setProductName(productName == null ? defaultProductName : productName);
+            translation.setCreatedAt(now);
+            translation.setUpdatedAt(now);
+            productTranslationMapper.insert(translation);
+        } else {
+            translation.setProductName(productName == null ? translation.getProductName() : productName);
+            translation.setUpdatedAt(now);
+            productTranslationMapper.updateById(translation);
+        }
+        return productTranslationResponse(product, locale, translation);
+    }
+
+    private AiModelTranslationResponse upsertAiModelTranslation(
+            AiModel model,
+            String locale,
+            String defaultModelName,
+            String defaultVendorName,
+            String modelName,
+            String vendorName
+    ) {
+        var now = DateTimeUtils.now();
+        var translation = aiModelTranslation(model.getId(), locale);
+        if (translation == null) {
+            translation = new AiModelTranslation();
+            translation.setAiModelId(model.getId());
+            translation.setLocale(locale);
+            translation.setModelName(modelName == null ? defaultModelName : modelName);
+            translation.setVendorName(vendorName == null ? defaultVendorName : vendorName);
+            translation.setCreatedAt(now);
+            translation.setUpdatedAt(now);
+            aiModelTranslationMapper.insert(translation);
+        } else {
+            translation.setModelName(modelName == null ? translation.getModelName() : modelName);
+            translation.setVendorName(vendorName == null ? translation.getVendorName() : vendorName);
+            translation.setUpdatedAt(now);
+            aiModelTranslationMapper.updateById(translation);
+        }
+        return aiModelTranslationResponse(model, locale, translation);
+    }
+
+    private RentalCycleRuleTranslationResponse upsertRentalCycleRuleTranslation(
+            RentalCycleRule rule,
+            String locale,
+            String defaultCycleName,
+            String cycleName
+    ) {
+        var now = DateTimeUtils.now();
+        var translation = rentalCycleRuleTranslation(rule.getId(), locale);
+        if (translation == null) {
+            translation = new RentalCycleRuleTranslation();
+            translation.setCycleRuleId(rule.getId());
+            translation.setLocale(locale);
+            translation.setCycleName(cycleName == null ? defaultCycleName : cycleName);
+            translation.setCreatedAt(now);
+            translation.setUpdatedAt(now);
+            rentalCycleRuleTranslationMapper.insert(translation);
+        } else {
+            translation.setCycleName(cycleName == null ? translation.getCycleName() : cycleName);
+            translation.setUpdatedAt(now);
+            rentalCycleRuleTranslationMapper.updateById(translation);
+        }
+        return rentalCycleRuleTranslationResponse(rule, locale, translation);
+    }
+
+    private RegionTranslationResponse regionTranslationResponse(
+            Long regionId,
+            String locale,
+            RegionTranslation translation
+    ) {
+        return new RegionTranslationResponse(regionId, locale,
+                translation == null ? null : translation.getRegionName(), translation != null,
+                translation == null ? null : translation.getCreatedAt(),
+                translation == null ? null : translation.getUpdatedAt());
+    }
+
+    private GpuModelTranslationResponse gpuModelTranslationResponse(
+            Long gpuModelId,
+            String locale,
+            GpuModelTranslation translation
+    ) {
+        return new GpuModelTranslationResponse(gpuModelId, locale,
+                translation == null ? null : translation.getModelName(), translation != null,
+                translation == null ? null : translation.getCreatedAt(),
+                translation == null ? null : translation.getUpdatedAt());
+    }
+
+    private ProductTranslationResponse productTranslationResponse(
+            Product product,
+            String locale,
+            ProductTranslation translation
+    ) {
+        return new ProductTranslationResponse(product.getId(), product.getProductCode(), locale,
+                translation == null ? null : translation.getProductName(), translation != null,
+                translation == null ? null : translation.getCreatedAt(),
+                translation == null ? null : translation.getUpdatedAt());
+    }
+
+    private AiModelTranslationResponse aiModelTranslationResponse(
+            AiModel model,
+            String locale,
+            AiModelTranslation translation
+    ) {
+        return new AiModelTranslationResponse(model.getId(), model.getModelCode(), locale,
+                translation == null ? null : translation.getModelName(),
+                translation == null ? null : translation.getVendorName(),
+                translation != null,
+                translation == null ? null : translation.getCreatedAt(),
+                translation == null ? null : translation.getUpdatedAt());
+    }
+
+    private RentalCycleRuleTranslationResponse rentalCycleRuleTranslationResponse(
+            RentalCycleRule rule,
+            String locale,
+            RentalCycleRuleTranslation translation
+    ) {
+        return new RentalCycleRuleTranslationResponse(rule.getId(), rule.getCycleCode(), locale,
+                translation == null ? null : translation.getCycleName(), translation != null,
+                translation == null ? null : translation.getCreatedAt(),
+                translation == null ? null : translation.getUpdatedAt());
     }
 
     private Region requireRegion(Long id) {
@@ -605,6 +1037,18 @@ public class AdminCatalogManagementService {
                 productCatalogCacheService.evictCatalog();
             }
         });
+    }
+
+    private String requireSupportedLocale(String locale) {
+        var normalized = StringUtils.hasText(locale) ? locale.trim().replace('_', '-') : null;
+        if (LanguageResolver.DEFAULT_LANGUAGE.equals(normalized) || LanguageResolver.EN_US.equals(normalized)) {
+            return normalized;
+        }
+        throw new BusinessException(ErrorCode.BAD_REQUEST, "Unsupported locale: " + locale);
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private boolean hasText(String value) {

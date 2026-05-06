@@ -25,6 +25,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootTest(classes = SecurityConfigTest.TestApplication.class)
 @AutoConfigureMockMvc
@@ -32,8 +36,35 @@ class SecurityConfigTest {
 
     @SpringBootConfiguration
     @EnableAutoConfiguration
-    @Import({AdminAuthController.class, SecurityConfig.class, JwtAuthenticationFilter.class})
+    @Import({AdminAuthController.class, PublicEndpointController.class, SecurityConfig.class, JwtAuthenticationFilter.class})
     static class TestApplication {
+    }
+
+    @RestController
+    static class PublicEndpointController {
+
+        @GetMapping({
+                "/api/regions",
+                "/api/gpu-models",
+                "/api/products",
+                "/api/products/{productCode}",
+                "/api/ai-models",
+                "/api/rental-cycle-rules",
+                "/api/system/enums"
+        })
+        String publicGet() {
+            return "ok";
+        }
+
+        @PostMapping("/api/rental/estimate")
+        String publicEstimate(@RequestBody(required = false) String ignored) {
+            return "ok";
+        }
+
+        @PostMapping("/api/products")
+        String protectedCatalogMutation(@RequestBody(required = false) String ignored) {
+            return "ok";
+        }
     }
 
     @Autowired
@@ -76,5 +107,37 @@ class SecurityConfigTest {
                         .header("Authorization", "Bearer TOKEN"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.userName").value("admin"));
+    }
+
+    @Test
+    void publicCatalogAndEnumEndpointsAreAnonymous() throws Exception {
+        var publicGetEndpoints = new String[] {
+                "/api/regions",
+                "/api/gpu-models",
+                "/api/products",
+                "/api/products/RTX4090-BJ",
+                "/api/ai-models",
+                "/api/rental-cycle-rules",
+                "/api/system/enums"
+        };
+
+        for (var endpoint : publicGetEndpoints) {
+            mockMvc.perform(get(endpoint).param("language", "en-US"))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(post("/api/rental/estimate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void catalogMutationStillRequiresUserToken() throws Exception {
+        mockMvc.perform(post("/api/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(ErrorCode.LOGIN_REQUIRED.code()));
     }
 }

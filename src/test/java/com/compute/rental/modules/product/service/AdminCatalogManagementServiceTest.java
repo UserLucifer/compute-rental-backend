@@ -13,14 +13,21 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.compute.rental.common.enums.CommonStatus;
 import com.compute.rental.modules.product.dto.AdminProductRequest;
 import com.compute.rental.modules.product.dto.AdminRegionRequest;
+import com.compute.rental.modules.product.dto.ProductTranslationRequest;
 import com.compute.rental.modules.product.entity.GpuModel;
 import com.compute.rental.modules.product.entity.Product;
+import com.compute.rental.modules.product.entity.ProductTranslation;
 import com.compute.rental.modules.product.entity.Region;
 import com.compute.rental.modules.product.mapper.AiModelMapper;
+import com.compute.rental.modules.product.mapper.AiModelTranslationMapper;
 import com.compute.rental.modules.product.mapper.GpuModelMapper;
+import com.compute.rental.modules.product.mapper.GpuModelTranslationMapper;
 import com.compute.rental.modules.product.mapper.ProductMapper;
+import com.compute.rental.modules.product.mapper.ProductTranslationMapper;
 import com.compute.rental.modules.product.mapper.RegionMapper;
+import com.compute.rental.modules.product.mapper.RegionTranslationMapper;
 import com.compute.rental.modules.product.mapper.RentalCycleRuleMapper;
+import com.compute.rental.modules.product.mapper.RentalCycleRuleTranslationMapper;
 import com.compute.rental.modules.system.service.AdminLogService;
 import java.util.List;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -48,6 +55,16 @@ class AdminCatalogManagementServiceTest {
     @Mock
     private RentalCycleRuleMapper rentalCycleRuleMapper;
     @Mock
+    private RegionTranslationMapper regionTranslationMapper;
+    @Mock
+    private GpuModelTranslationMapper gpuModelTranslationMapper;
+    @Mock
+    private ProductTranslationMapper productTranslationMapper;
+    @Mock
+    private AiModelTranslationMapper aiModelTranslationMapper;
+    @Mock
+    private RentalCycleRuleTranslationMapper rentalCycleRuleTranslationMapper;
+    @Mock
     private AdminLogService adminLogService;
     @Mock
     private ProductCatalogCacheService productCatalogCacheService;
@@ -56,13 +73,17 @@ class AdminCatalogManagementServiceTest {
 
     @BeforeAll
     static void initMybatisPlusTableInfo() {
-        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new Configuration(), ""), Product.class);
+        var configuration = new Configuration();
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), Product.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), ProductTranslation.class);
     }
 
     @BeforeEach
     void setUp() {
         service = new AdminCatalogManagementService(regionMapper, gpuModelMapper, productMapper, aiModelMapper,
-                rentalCycleRuleMapper, adminLogService, productCatalogCacheService);
+                rentalCycleRuleMapper, regionTranslationMapper, gpuModelTranslationMapper, productTranslationMapper,
+                aiModelTranslationMapper, rentalCycleRuleTranslationMapper, adminLogService,
+                productCatalogCacheService);
     }
 
     @Test
@@ -177,5 +198,31 @@ class AdminCatalogManagementServiceTest {
         assertEquals(100L, captor.getValue().getId());
         assertEquals("P100", captor.getValue().getProductCode());
         assertEquals("Updated Product", captor.getValue().getProductName());
+    }
+
+    @Test
+    void updateProductTranslationCreatesEnglishTranslation() {
+        var product = new Product();
+        product.setId(100L);
+        product.setProductCode("P100");
+        product.setProductName("中文商品");
+        when(productMapper.selectOne(any())).thenReturn(product);
+
+        var result = service.updateProductTranslation("P100",
+                new ProductTranslationRequest("en-US", "English Product"), 9L, "127.0.0.1");
+
+        assertEquals(100L, result.productId());
+        assertEquals("P100", result.productCode());
+        assertEquals("en-US", result.locale());
+        assertEquals("English Product", result.productName());
+
+        var captor = ArgumentCaptor.forClass(ProductTranslation.class);
+        verify(productTranslationMapper).insert(captor.capture());
+        assertEquals(100L, captor.getValue().getProductId());
+        assertEquals("en-US", captor.getValue().getLocale());
+        assertEquals("English Product", captor.getValue().getProductName());
+        verify(adminLogService).log(eq(9L), eq("UPDATE_PRODUCT_TRANSLATION"), eq("product"), eq(100L),
+                isNull(), isNull(), eq("en-US"), eq("127.0.0.1"));
+        verify(productCatalogCacheService).evictCatalog();
     }
 }

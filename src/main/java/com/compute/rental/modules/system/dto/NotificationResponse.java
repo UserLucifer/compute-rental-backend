@@ -25,6 +25,12 @@ public record NotificationResponse(
         @Schema(description = "Read time")
         LocalDateTime readAt,
         @Schema(description = "Created time")
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        @Schema(description = "Actual response locale")
+        String locale,
+        @Schema(description = "Requested locale")
+        String requestedLocale,
+        @Schema(description = "Whether locale fallback was used")
+        Boolean localeFallback
 ) {
 }

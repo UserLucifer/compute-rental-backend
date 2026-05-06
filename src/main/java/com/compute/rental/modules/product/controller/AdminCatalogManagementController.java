@@ -3,6 +3,8 @@ package com.compute.rental.modules.product.controller;
 import com.compute.rental.common.api.ApiResponse;
 import com.compute.rental.common.enums.CommonStatus;
 import com.compute.rental.common.page.PageResult;
+import com.compute.rental.modules.product.dto.AiModelTranslationRequest;
+import com.compute.rental.modules.product.dto.AiModelTranslationResponse;
 import com.compute.rental.modules.product.dto.AdminAiModelRequest;
 import com.compute.rental.modules.product.dto.AdminAiModelResponse;
 import com.compute.rental.modules.product.dto.AdminGpuModelRequest;
@@ -13,6 +15,14 @@ import com.compute.rental.modules.product.dto.AdminRegionRequest;
 import com.compute.rental.modules.product.dto.AdminRegionResponse;
 import com.compute.rental.modules.product.dto.AdminRentalCycleRuleRequest;
 import com.compute.rental.modules.product.dto.AdminRentalCycleRuleResponse;
+import com.compute.rental.modules.product.dto.GpuModelTranslationRequest;
+import com.compute.rental.modules.product.dto.GpuModelTranslationResponse;
+import com.compute.rental.modules.product.dto.ProductTranslationRequest;
+import com.compute.rental.modules.product.dto.ProductTranslationResponse;
+import com.compute.rental.modules.product.dto.RegionTranslationRequest;
+import com.compute.rental.modules.product.dto.RegionTranslationResponse;
+import com.compute.rental.modules.product.dto.RentalCycleRuleTranslationRequest;
+import com.compute.rental.modules.product.dto.RentalCycleRuleTranslationResponse;
 import com.compute.rental.modules.product.service.AdminCatalogManagementService;
 import com.compute.rental.modules.system.service.AdminLogService;
 import com.compute.rental.security.CurrentUser;
@@ -20,6 +30,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -79,6 +90,24 @@ public class AdminCatalogManagementController {
                 adminLogService.clientIp(httpRequest)));
     }
 
+    @Operation(summary = "Admin region translations")
+    @GetMapping("/regions/{id}/translations")
+    public ApiResponse<List<RegionTranslationResponse>> regionTranslations(@PathVariable Long id) {
+        return ApiResponse.success(adminCatalogManagementService.listRegionTranslations(id));
+    }
+
+    @Operation(summary = "Update region translation")
+    @PutMapping("/regions/{id}/translations")
+    public ApiResponse<RegionTranslationResponse> updateRegionTranslation(
+            @PathVariable Long id,
+            @Valid @RequestBody RegionTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        return ApiResponse.success(adminCatalogManagementService.updateRegionTranslation(id, request, admin.id(),
+                adminLogService.clientIp(httpRequest)));
+    }
+
     @Operation(summary = "Enable region")
     @PostMapping("/regions/{id}/enable")
     public ApiResponse<AdminRegionResponse> enableRegion(@PathVariable Long id, HttpServletRequest httpRequest) {
@@ -126,6 +155,24 @@ public class AdminCatalogManagementController {
     ) {
         var admin = CurrentUser.requiredAdmin();
         return ApiResponse.success(adminCatalogManagementService.updateGpuModel(id, request, admin.id(),
+                adminLogService.clientIp(httpRequest)));
+    }
+
+    @Operation(summary = "Admin GPU model translations")
+    @GetMapping("/gpu-models/{id}/translations")
+    public ApiResponse<List<GpuModelTranslationResponse>> gpuModelTranslations(@PathVariable Long id) {
+        return ApiResponse.success(adminCatalogManagementService.listGpuModelTranslations(id));
+    }
+
+    @Operation(summary = "Update GPU model translation")
+    @PutMapping("/gpu-models/{id}/translations")
+    public ApiResponse<GpuModelTranslationResponse> updateGpuModelTranslation(
+            @PathVariable Long id,
+            @Valid @RequestBody GpuModelTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        return ApiResponse.success(adminCatalogManagementService.updateGpuModelTranslation(id, request, admin.id(),
                 adminLogService.clientIp(httpRequest)));
     }
 
@@ -188,6 +235,24 @@ public class AdminCatalogManagementController {
                 adminLogService.clientIp(httpRequest)));
     }
 
+    @Operation(summary = "Admin product translations")
+    @GetMapping("/products/{productCode}/translations")
+    public ApiResponse<List<ProductTranslationResponse>> productTranslations(@PathVariable String productCode) {
+        return ApiResponse.success(adminCatalogManagementService.listProductTranslations(productCode));
+    }
+
+    @Operation(summary = "Update product translation")
+    @PutMapping("/products/{productCode}/translations")
+    public ApiResponse<ProductTranslationResponse> updateProductTranslation(
+            @PathVariable String productCode,
+            @Valid @RequestBody ProductTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        return ApiResponse.success(adminCatalogManagementService.updateProductTranslation(productCode, request,
+                admin.id(), adminLogService.clientIp(httpRequest)));
+    }
+
     @Operation(summary = "Enable product")
     @PostMapping("/products/{productCode}/enable")
     public ApiResponse<AdminProductResponse> enableProduct(@PathVariable String productCode, HttpServletRequest httpRequest) {
@@ -238,6 +303,24 @@ public class AdminCatalogManagementController {
                 adminLogService.clientIp(httpRequest)));
     }
 
+    @Operation(summary = "Admin AI model translations")
+    @GetMapping("/ai-models/{modelCode}/translations")
+    public ApiResponse<List<AiModelTranslationResponse>> aiModelTranslations(@PathVariable String modelCode) {
+        return ApiResponse.success(adminCatalogManagementService.listAiModelTranslations(modelCode));
+    }
+
+    @Operation(summary = "Update AI model translation")
+    @PutMapping("/ai-models/{modelCode}/translations")
+    public ApiResponse<AiModelTranslationResponse> updateAiModelTranslation(
+            @PathVariable String modelCode,
+            @Valid @RequestBody AiModelTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        return ApiResponse.success(adminCatalogManagementService.updateAiModelTranslation(modelCode, request,
+                admin.id(), adminLogService.clientIp(httpRequest)));
+    }
+
     @Operation(summary = "Enable AI model")
     @PostMapping("/ai-models/{modelCode}/enable")
     public ApiResponse<AdminAiModelResponse> enableAiModel(@PathVariable String modelCode, HttpServletRequest httpRequest) {
@@ -286,6 +369,26 @@ public class AdminCatalogManagementController {
         var admin = CurrentUser.requiredAdmin();
         return ApiResponse.success(adminCatalogManagementService.updateCycleRule(cycleCode, request, admin.id(),
                 adminLogService.clientIp(httpRequest)));
+    }
+
+    @Operation(summary = "Admin rental cycle rule translations")
+    @GetMapping("/rental-cycle-rules/{cycleCode}/translations")
+    public ApiResponse<List<RentalCycleRuleTranslationResponse>> cycleRuleTranslations(
+            @PathVariable String cycleCode
+    ) {
+        return ApiResponse.success(adminCatalogManagementService.listCycleRuleTranslations(cycleCode));
+    }
+
+    @Operation(summary = "Update rental cycle rule translation")
+    @PutMapping("/rental-cycle-rules/{cycleCode}/translations")
+    public ApiResponse<RentalCycleRuleTranslationResponse> updateCycleRuleTranslation(
+            @PathVariable String cycleCode,
+            @Valid @RequestBody RentalCycleRuleTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        return ApiResponse.success(adminCatalogManagementService.updateCycleRuleTranslation(cycleCode, request,
+                admin.id(), adminLogService.clientIp(httpRequest)));
     }
 
     @Operation(summary = "Enable rental cycle rule")

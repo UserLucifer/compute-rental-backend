@@ -28,6 +28,9 @@ public record ProductResponse(
         Integer maxExpandDiskGb,
         String driverVersion,
         String cudaVersion,
-        Integer hasCacheOptimization
+        Integer hasCacheOptimization,
+        String locale,
+        String requestedLocale,
+        Boolean localeFallback
 ) {
 }

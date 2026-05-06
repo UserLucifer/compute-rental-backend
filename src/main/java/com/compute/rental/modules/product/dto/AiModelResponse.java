@@ -10,6 +10,9 @@ public record AiModelResponse(
         String logoUrl,
         BigDecimal monthlyTokenConsumptionTrillion,
         BigDecimal tokenUnitPrice,
-        BigDecimal deployTechFee
+        BigDecimal deployTechFee,
+        String locale,
+        String requestedLocale,
+        Boolean localeFallback
 ) {
 }

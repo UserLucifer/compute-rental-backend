@@ -16,6 +16,9 @@ public record RentalEstimateResponse(
         BigDecimal tokenUnitPrice,
         BigDecimal yieldMultiplier,
         BigDecimal expectedDailyProfit,
-        BigDecimal expectedTotalProfit
+        BigDecimal expectedTotalProfit,
+        String locale,
+        String requestedLocale,
+        Boolean localeFallback
 ) {
 }

@@ -39,6 +39,20 @@ ON DUPLICATE KEY UPDATE
   `fee_rate` = VALUES(`fee_rate`),
   `sort_no` = VALUES(`sort_no`);
 
+INSERT INTO `recharge_channel_translation` (`channel_id`, `locale`, `channel_name`, `account_name`)
+SELECT c.`id`, 'zh-CN', c.`channel_name`, c.`account_name`
+FROM `recharge_channel` c
+ON DUPLICATE KEY UPDATE
+  `channel_name` = VALUES(`channel_name`),
+  `account_name` = VALUES(`account_name`);
+
+INSERT INTO `recharge_channel_translation` (`channel_id`, `locale`, `channel_name`, `account_name`)
+SELECT c.`id`, 'en-US', c.`channel_name`, c.`account_name`
+FROM `recharge_channel` c
+ON DUPLICATE KEY UPDATE
+  `channel_name` = VALUES(`channel_name`),
+  `account_name` = VALUES(`account_name`);
+
 INSERT INTO `ai_model` (
   `model_code`, `model_name`, `vendor_name`, `logo_url`,
   `monthly_token_consumption_trillion`, `token_unit_price`, `deploy_tech_fee`,
@@ -3424,6 +3438,111 @@ JOIN `blog_tag` t ON (
   (p.`title` = 'GPU 任务稳定运行指南：驱动、CUDA、显存和日志怎么排查' AND t.`tag_name` IN ('模型部署', 'AI训练', 'AI推理')) OR
   (p.`title` = '从模型训练到推理服务：算力成本优化的 6 个关键动作' AND t.`tag_name` IN ('成本优化', '模型部署', '算力租赁'))
 );
+
+-- Notification multilingual seed data.
+INSERT INTO `sys_notification_translation` (`notification_id`, `locale`, `title`, `content`)
+SELECT n.`id`, 'zh-CN', n.`title`, n.`content`
+FROM `sys_notification` n
+ON DUPLICATE KEY UPDATE
+  `title` = VALUES(`title`),
+  `content` = VALUES(`content`);
+
+INSERT INTO `sys_notification_translation` (`notification_id`, `locale`, `title`, `content`)
+SELECT n.`id`, 'en-US', NULL, NULL
+FROM `sys_notification` n
+ON DUPLICATE KEY UPDATE
+  `title` = COALESCE(`sys_notification_translation`.`title`, VALUES(`title`)),
+  `content` = COALESCE(`sys_notification_translation`.`content`, VALUES(`content`));
+
+-- Blog multilingual seed data.
+INSERT INTO `blog_category_translation` (`category_id`, `locale`, `category_name`)
+SELECT c.`id`, 'zh-CN', c.`category_name`
+FROM `blog_category` c
+ON DUPLICATE KEY UPDATE
+  `category_name` = VALUES(`category_name`);
+
+INSERT INTO `blog_category_translation` (`category_id`, `locale`, `category_name`)
+SELECT c.`id`, 'en-US',
+       CASE c.`category_name`
+         WHEN 'GPU选型' THEN 'GPU Selection'
+         WHEN 'Token收益' THEN 'Token Yield'
+         WHEN 'AI部署' THEN 'AI Deployment'
+         WHEN '算力市场' THEN 'Compute Market'
+         WHEN '运维实践' THEN 'Operations Practice'
+         ELSE c.`category_name`
+       END
+FROM `blog_category` c
+ON DUPLICATE KEY UPDATE
+  `category_name` = VALUES(`category_name`);
+
+INSERT INTO `blog_tag_translation` (`tag_id`, `locale`, `tag_name`)
+SELECT t.`id`, 'zh-CN', t.`tag_name`
+FROM `blog_tag` t
+ON DUPLICATE KEY UPDATE
+  `tag_name` = VALUES(`tag_name`);
+
+INSERT INTO `blog_tag_translation` (`tag_id`, `locale`, `tag_name`)
+SELECT t.`id`, 'en-US',
+       CASE t.`tag_name`
+         WHEN 'AI训练' THEN 'AI Training'
+         WHEN 'AI推理' THEN 'AI Inference'
+         WHEN 'Token收益' THEN 'Token Yield'
+         WHEN '模型部署' THEN 'Model Deployment'
+         WHEN '算力租赁' THEN 'Compute Rental'
+         WHEN '成本优化' THEN 'Cost Optimization'
+         ELSE t.`tag_name`
+       END
+FROM `blog_tag` t
+ON DUPLICATE KEY UPDATE
+  `tag_name` = VALUES(`tag_name`);
+
+INSERT INTO `blog_post_translation` (`post_id`, `locale`, `title`, `summary`, `content_markdown`)
+SELECT p.`id`, 'zh-CN', p.`title`, p.`summary`, p.`content_markdown`
+FROM `blog_post` p
+ON DUPLICATE KEY UPDATE
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = VALUES(`content_markdown`);
+
+INSERT INTO `blog_post_translation` (`post_id`, `locale`, `title`, `summary`, `content_markdown`)
+SELECT p.`id`, 'en-US', seed.`title`, seed.`summary`, NULL
+FROM (
+  SELECT 'RTX 5090 适合哪些 AI 场景：从显存、吞吐到租赁周期的完整判断' AS `source_title`,
+         'RTX 5090 for AI workloads: memory, throughput, and rental cycle decisions' AS `title`,
+         'For developers and small teams, this guide explains where RTX 5090 fits across fine-tuning, generation, inference, and rental cost planning.' AS `summary`
+  UNION ALL SELECT 'RTX 4090 与 RTX 4090D：AI 推理和内容生成的性价比怎么选',
+         'RTX 4090 vs RTX 4090D: choosing value for AI inference and generation',
+         'A practical comparison of RTX 4090 series value across memory, ecosystem compatibility, task queues, and cost per useful output.'
+  UNION ALL SELECT 'A800、A100 与 H20：大显存训练和企业推理的选型思路',
+         'A800, A100, and H20: selection logic for large-memory training and enterprise inference',
+         'A selection guide for enterprise GPUs, focusing on memory, interconnect, stability, and sustainable rental capacity.'
+  UNION ALL SELECT 'Token 收益怎么估算：把 GPU 产出、单价和周期收益讲清楚',
+         'Estimating token yield: GPU output, unit price, and cycle returns',
+         'A clear model for estimating token output, token price, rental cycle multiplier, cost, and common risk discounts before ordering.'
+  UNION ALL SELECT '租赁周期怎么选：7 天、30 天和 90 天的收益风险对比',
+         'Choosing rental cycles: 7-day, 30-day, and 90-day trade-offs',
+         'How different rental cycles affect trial cost, yield multiplier, liquidity risk, and decisions for new users and stable teams.'
+  UNION ALL SELECT 'AI 模型 API 部署前要准备什么：从镜像、密钥到限流策略',
+         'What to prepare before AI model API deployment',
+         'A deployment checklist covering images, model files, access tokens, rate limits, logs, billing boundaries, and launch checks.'
+  UNION ALL SELECT 'RAG、Agent 与多模态应用：不同 AI 产品该租哪类算力',
+         'RAG, agents, and multimodal apps: choosing compute for different AI products',
+         'A guide to matching compute resources to RAG, agent automation, and multimodal generation workloads.'
+  UNION ALL SELECT '为什么算力租赁适合 AI 初创团队：现金流、弹性和试错速度',
+         'Why compute rental fits AI startups: cash flow, elasticity, and speed',
+         'Why rental GPU resources help early AI teams reduce upfront cost, move faster, handle peaks, and manage resource usage.'
+  UNION ALL SELECT 'GPU 任务稳定运行指南：驱动、CUDA、显存和日志怎么排查',
+         'Stable GPU workload operations: drivers, CUDA, memory, and logs',
+         'A troubleshooting order for common GPU rental issues, including dependency mismatch, memory pressure, disk usage, processes, and logs.'
+  UNION ALL SELECT '从模型训练到推理服务：算力成本优化的 6 个关键动作',
+         'Six practical actions for optimizing compute cost from training to inference',
+         'Six concrete ways to reduce GPU cost through stage planning, matching bottlenecks, batching, caching, monitoring, and rental cycle strategy.'
+) seed
+JOIN `blog_post` p ON p.`title` = seed.`source_title`
+ON DUPLICATE KEY UPDATE
+  `title` = VALUES(`title`),
+  `summary` = VALUES(`summary`),
+  `content_markdown` = COALESCE(VALUES(`content_markdown`), `blog_post_translation`.`content_markdown`);
 -- Documentation center seed data.
 INSERT INTO `doc_category` (`parent_id`, `language`, `section`, `category_code`, `category_name`, `icon`, `sort_no`, `status`) VALUES
 (NULL, 'zh-CN', 'guide', 'guides', '使用指南', 'book-open', 1, 1),
@@ -3494,6 +3613,104 @@ ON DUPLICATE KEY UPDATE
   `is_section_home` = VALUES(`is_section_home`),
   `published_at` = VALUES(`published_at`),
   `sort_no` = VALUES(`sort_no`),
+  `updated_at` = NOW();
+
+-- Multilingual catalog initialization data.
+INSERT INTO `region_translation` (`region_id`, `locale`, `region_name`)
+SELECT `id`, 'zh-CN', `region_name`
+FROM `region`
+ON DUPLICATE KEY UPDATE
+  `region_name` = VALUES(`region_name`),
+  `updated_at` = NOW();
+
+INSERT INTO `region_translation` (`region_id`, `locale`, `region_name`)
+SELECT `id`,
+       'en-US',
+       CASE `region_code`
+         WHEN 'beijing-a' THEN 'Beijing Zone A'
+         WHEN 'beijing-b' THEN 'Beijing Zone B'
+         WHEN 'chongqing-a' THEN 'Chongqing Zone A'
+         WHEN 'foshan' THEN 'Foshan Zone'
+         WHEN 'neimeng-b' THEN 'Inner Mongolia Zone B'
+         WHEN 'xibei-b' THEN 'Northwest Zone B'
+         WHEN 'a800' THEN 'A800 Zone'
+         WHEN 'l20' THEN 'L20 Zone'
+         WHEN 'v100' THEN 'V100 Zone'
+         WHEN 'huawei-ascend' THEN 'Huawei Ascend Zone'
+         WHEN 'moore-threads' THEN 'Moore Threads Zone'
+         ELSE `region_name`
+       END
+FROM `region`
+ON DUPLICATE KEY UPDATE
+  `region_name` = VALUES(`region_name`),
+  `updated_at` = NOW();
+
+INSERT INTO `gpu_model_translation` (`gpu_model_id`, `locale`, `model_name`)
+SELECT `id`, 'zh-CN', `model_name`
+FROM `gpu_model`
+ON DUPLICATE KEY UPDATE
+  `model_name` = VALUES(`model_name`),
+  `updated_at` = NOW();
+
+INSERT INTO `gpu_model_translation` (`gpu_model_id`, `locale`, `model_name`)
+SELECT `id`, 'en-US', `model_name`
+FROM `gpu_model`
+ON DUPLICATE KEY UPDATE
+  `model_name` = VALUES(`model_name`),
+  `updated_at` = NOW();
+
+INSERT INTO `product_translation` (`product_id`, `locale`, `product_name`)
+SELECT `id`, 'zh-CN', `product_name`
+FROM `product`
+ON DUPLICATE KEY UPDATE
+  `product_name` = VALUES(`product_name`),
+  `updated_at` = NOW();
+
+INSERT INTO `product_translation` (`product_id`, `locale`, `product_name`)
+SELECT `id`, 'en-US', `product_name`
+FROM `product`
+ON DUPLICATE KEY UPDATE
+  `product_name` = VALUES(`product_name`),
+  `updated_at` = NOW();
+
+INSERT INTO `ai_model_translation` (`ai_model_id`, `locale`, `model_name`, `vendor_name`)
+SELECT `id`, 'zh-CN', `model_name`, `vendor_name`
+FROM `ai_model`
+ON DUPLICATE KEY UPDATE
+  `model_name` = VALUES(`model_name`),
+  `vendor_name` = VALUES(`vendor_name`),
+  `updated_at` = NOW();
+
+INSERT INTO `ai_model_translation` (`ai_model_id`, `locale`, `model_name`, `vendor_name`)
+SELECT `id`, 'en-US', `model_name`, `vendor_name`
+FROM `ai_model`
+ON DUPLICATE KEY UPDATE
+  `model_name` = VALUES(`model_name`),
+  `vendor_name` = VALUES(`vendor_name`),
+  `updated_at` = NOW();
+
+INSERT INTO `rental_cycle_rule_translation` (`cycle_rule_id`, `locale`, `cycle_name`)
+SELECT `id`, 'zh-CN', `cycle_name`
+FROM `rental_cycle_rule`
+ON DUPLICATE KEY UPDATE
+  `cycle_name` = VALUES(`cycle_name`),
+  `updated_at` = NOW();
+
+INSERT INTO `rental_cycle_rule_translation` (`cycle_rule_id`, `locale`, `cycle_name`)
+SELECT `id`,
+       'en-US',
+       CASE `cycle_code`
+         WHEN 'D7' THEN '7 days'
+         WHEN 'D15' THEN '15 days'
+         WHEN 'D30' THEN '1 month'
+         WHEN 'D90' THEN '3 months'
+         WHEN 'D180' THEN '6 months'
+         WHEN 'D360' THEN '12 months'
+         ELSE `cycle_name`
+       END
+FROM `rental_cycle_rule`
+ON DUPLICATE KEY UPDATE
+  `cycle_name` = VALUES(`cycle_name`),
   `updated_at` = NOW();
 
 -- English documentation center seed data.

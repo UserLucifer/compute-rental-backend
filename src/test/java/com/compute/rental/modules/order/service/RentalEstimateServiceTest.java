@@ -12,8 +12,11 @@ import com.compute.rental.modules.product.entity.AiModel;
 import com.compute.rental.modules.product.entity.Product;
 import com.compute.rental.modules.product.entity.RentalCycleRule;
 import com.compute.rental.modules.product.mapper.AiModelMapper;
+import com.compute.rental.modules.product.mapper.AiModelTranslationMapper;
 import com.compute.rental.modules.product.mapper.ProductMapper;
+import com.compute.rental.modules.product.mapper.ProductTranslationMapper;
 import com.compute.rental.modules.product.mapper.RentalCycleRuleMapper;
+import com.compute.rental.modules.product.mapper.RentalCycleRuleTranslationMapper;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +36,15 @@ class RentalEstimateServiceTest {
     @Mock
     private RentalCycleRuleMapper rentalCycleRuleMapper;
 
+    @Mock
+    private ProductTranslationMapper productTranslationMapper;
+
+    @Mock
+    private AiModelTranslationMapper aiModelTranslationMapper;
+
+    @Mock
+    private RentalCycleRuleTranslationMapper rentalCycleRuleTranslationMapper;
+
     @InjectMocks
     private RentalEstimateService rentalEstimateService;
 
@@ -42,7 +54,7 @@ class RentalEstimateServiceTest {
         when(aiModelMapper.selectById(2L)).thenReturn(aiModel(CommonStatus.ENABLED.value()));
         when(rentalCycleRuleMapper.selectById(3L)).thenReturn(cycleRule(CommonStatus.ENABLED.value()));
 
-        var response = rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L));
+        var response = rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L, null));
 
         assertThat(response.tokenOutputPerDay()).isEqualTo(1000L);
         assertThat(response.tokenUnitPrice()).isEqualByComparingTo("0.01000000");
@@ -55,7 +67,7 @@ class RentalEstimateServiceTest {
     void estimateShouldRejectMissingProduct() {
         when(productMapper.selectById(1L)).thenReturn(null);
 
-        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L)))
+        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PRODUCT_NOT_FOUND);
@@ -66,7 +78,7 @@ class RentalEstimateServiceTest {
         when(productMapper.selectById(1L)).thenReturn(product(CommonStatus.ENABLED.value()));
         when(aiModelMapper.selectById(2L)).thenReturn(null);
 
-        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L)))
+        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.AI_MODEL_NOT_FOUND);
@@ -78,7 +90,7 @@ class RentalEstimateServiceTest {
         when(aiModelMapper.selectById(2L)).thenReturn(aiModel(CommonStatus.ENABLED.value()));
         when(rentalCycleRuleMapper.selectById(3L)).thenReturn(null);
 
-        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L)))
+        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.RENTAL_CYCLE_RULE_NOT_FOUND);
@@ -88,7 +100,7 @@ class RentalEstimateServiceTest {
     void estimateShouldRejectDisabledProduct() {
         when(productMapper.selectById(1L)).thenReturn(product(CommonStatus.DISABLED.value()));
 
-        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L)))
+        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PRODUCT_NOT_FOUND);
@@ -99,7 +111,7 @@ class RentalEstimateServiceTest {
         when(productMapper.selectById(1L)).thenReturn(product(CommonStatus.ENABLED.value()));
         when(aiModelMapper.selectById(2L)).thenReturn(aiModel(CommonStatus.DISABLED.value()));
 
-        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L)))
+        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.AI_MODEL_NOT_FOUND);
@@ -111,7 +123,7 @@ class RentalEstimateServiceTest {
         when(aiModelMapper.selectById(2L)).thenReturn(aiModel(CommonStatus.ENABLED.value()));
         when(rentalCycleRuleMapper.selectById(3L)).thenReturn(cycleRule(CommonStatus.DISABLED.value()));
 
-        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L)))
+        assertThatThrownBy(() -> rentalEstimateService.estimate(new RentalEstimateRequest(1L, 2L, 3L, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.RENTAL_CYCLE_RULE_NOT_FOUND);

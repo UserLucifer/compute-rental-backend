@@ -13,7 +13,9 @@ public record ProductQueryRequest(
 
         Long regionId,
 
-        Long gpuModelId
+        Long gpuModelId,
+
+        String language
 ) {
 
     public long current() {

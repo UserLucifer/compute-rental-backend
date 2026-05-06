@@ -41,6 +41,20 @@ public class SecurityConfig {
             "/ws/**"
     };
 
+    private static final String[] PUBLIC_GET_ENDPOINTS = {
+            "/api/regions",
+            "/api/gpu-models",
+            "/api/products",
+            "/api/products/*",
+            "/api/ai-models",
+            "/api/rental-cycle-rules",
+            "/api/system/enums"
+    };
+
+    private static final String[] PUBLIC_POST_ENDPOINTS = {
+            "/api/rental/estimate"
+    };
+
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
@@ -58,6 +72,8 @@ public class SecurityConfig {
                                 writeSecurityError(response, objectMapper, ErrorCode.FORBIDDEN)))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(publicEndpointMatchers()).permitAll()
+                        .requestMatchers(publicEndpointMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS)).permitAll()
+                        .requestMatchers(publicEndpointMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS)).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().hasRole("USER")
@@ -72,9 +88,13 @@ public class SecurityConfig {
     }
 
     private AntPathRequestMatcher[] publicEndpointMatchers() {
-        var matchers = new AntPathRequestMatcher[PUBLIC_ENDPOINTS.length];
-        for (int i = 0; i < PUBLIC_ENDPOINTS.length; i++) {
-            matchers[i] = new AntPathRequestMatcher(PUBLIC_ENDPOINTS[i]);
+        return publicEndpointMatchers(null, PUBLIC_ENDPOINTS);
+    }
+
+    private AntPathRequestMatcher[] publicEndpointMatchers(HttpMethod method, String[] endpoints) {
+        var matchers = new AntPathRequestMatcher[endpoints.length];
+        for (int i = 0; i < endpoints.length; i++) {
+            matchers[i] = new AntPathRequestMatcher(endpoints[i], method == null ? null : method.name());
         }
         return matchers;
     }

@@ -17,15 +17,25 @@ import com.compute.rental.modules.product.dto.ProductQueryRequest;
 import com.compute.rental.modules.product.dto.ProductResponse;
 import com.compute.rental.modules.product.dto.RegionResponse;
 import com.compute.rental.modules.product.entity.AiModel;
+import com.compute.rental.modules.product.entity.AiModelTranslation;
 import com.compute.rental.modules.product.entity.GpuModel;
+import com.compute.rental.modules.product.entity.GpuModelTranslation;
 import com.compute.rental.modules.product.entity.Product;
+import com.compute.rental.modules.product.entity.ProductTranslation;
 import com.compute.rental.modules.product.entity.Region;
+import com.compute.rental.modules.product.entity.RegionTranslation;
 import com.compute.rental.modules.product.entity.RentalCycleRule;
+import com.compute.rental.modules.product.entity.RentalCycleRuleTranslation;
 import com.compute.rental.modules.product.mapper.AiModelMapper;
+import com.compute.rental.modules.product.mapper.AiModelTranslationMapper;
 import com.compute.rental.modules.product.mapper.GpuModelMapper;
+import com.compute.rental.modules.product.mapper.GpuModelTranslationMapper;
 import com.compute.rental.modules.product.mapper.ProductMapper;
+import com.compute.rental.modules.product.mapper.ProductTranslationMapper;
 import com.compute.rental.modules.product.mapper.RegionMapper;
+import com.compute.rental.modules.product.mapper.RegionTranslationMapper;
 import com.compute.rental.modules.product.mapper.RentalCycleRuleMapper;
+import com.compute.rental.modules.product.mapper.RentalCycleRuleTranslationMapper;
 import java.math.BigDecimal;
 import java.util.List;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -57,6 +67,21 @@ class ProductCatalogServiceTest {
     private RentalCycleRuleMapper rentalCycleRuleMapper;
 
     @Mock
+    private RegionTranslationMapper regionTranslationMapper;
+
+    @Mock
+    private GpuModelTranslationMapper gpuModelTranslationMapper;
+
+    @Mock
+    private ProductTranslationMapper productTranslationMapper;
+
+    @Mock
+    private AiModelTranslationMapper aiModelTranslationMapper;
+
+    @Mock
+    private RentalCycleRuleTranslationMapper rentalCycleRuleTranslationMapper;
+
+    @Mock
     private ProductCatalogCacheService productCatalogCacheService;
 
     @InjectMocks
@@ -70,12 +95,17 @@ class ProductCatalogServiceTest {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), Product.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), AiModel.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RentalCycleRule.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RegionTranslation.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), GpuModelTranslation.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), ProductTranslation.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), AiModelTranslation.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RentalCycleRuleTranslation.class);
     }
 
     @Test
     void listEnabledRegionsShouldReturnCachedValueWhenPresent() {
-        var cached = List.of(new RegionResponse(9L, "SG", "Singapore"));
-        when(productCatalogCacheService.get(eq(RedisKeys.catalogRegions()), any())).thenReturn(cached);
+        var cached = List.of(new RegionResponse(9L, "SG", "Singapore", "zh-CN", "zh-CN", false));
+        when(productCatalogCacheService.get(eq(RedisKeys.catalogRegions("zh-CN")), any())).thenReturn(cached);
 
         var result = productCatalogService.listEnabledRegions();
 
@@ -92,14 +122,14 @@ class ProductCatalogServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).regionCode()).isEqualTo("HK");
-        verify(productCatalogCacheService).put(eq(RedisKeys.catalogRegions()), eq(result));
+        verify(productCatalogCacheService).put(eq(RedisKeys.catalogRegions("zh-CN")), eq(result));
     }
 
     @Test
     void pageEnabledProductsShouldReturnCachedValueWhenPresent() {
-        var request = new ProductQueryRequest(1, 10, 1L, 2L);
+        var request = new ProductQueryRequest(1, 10, 1L, 2L, null);
         var cached = new PageResult<ProductResponse>(List.of(), 0, 1, 10);
-        when(productCatalogCacheService.get(eq(RedisKeys.catalogProductPage(1, 10, 1L, 2L)), any()))
+        when(productCatalogCacheService.get(eq(RedisKeys.catalogProductPage(1, 10, 1L, 2L, "zh-CN")), any()))
                 .thenReturn(cached);
 
         var result = productCatalogService.pageEnabledProducts(request);
@@ -119,7 +149,7 @@ class ProductCatalogServiceTest {
         when(regionMapper.selectBatchIds(any())).thenReturn(List.of(region()));
         when(gpuModelMapper.selectBatchIds(any())).thenReturn(List.of(gpuModel()));
 
-        var result = productCatalogService.pageEnabledProducts(new ProductQueryRequest(1, 10, 1L, 2L));
+        var result = productCatalogService.pageEnabledProducts(new ProductQueryRequest(1, 10, 1L, 2L, null));
 
         assertThat(result.records()).hasSize(1);
         assertThat(result.records().get(0).regionName()).isEqualTo("Hong Kong");
@@ -129,7 +159,7 @@ class ProductCatalogServiceTest {
         var wrapperCaptor = ArgumentCaptor.forClass(Wrapper.class);
         verify(productMapper).selectPage(any(Page.class), wrapperCaptor.capture());
         assertThat(wrapperCaptor.getValue().getSqlSegment()).contains("status", "region_id", "gpu_model_id");
-        verify(productCatalogCacheService).put(eq(RedisKeys.catalogProductPage(1, 10, 1L, 2L)), eq(result));
+        verify(productCatalogCacheService).put(eq(RedisKeys.catalogProductPage(1, 10, 1L, 2L, "zh-CN")), eq(result));
     }
 
     @Test

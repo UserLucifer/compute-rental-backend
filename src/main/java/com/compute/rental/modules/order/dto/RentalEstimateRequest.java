@@ -10,6 +10,8 @@ public record RentalEstimateRequest(
         Long aiModelId,
 
         @NotNull
-        Long cycleRuleId
+        Long cycleRuleId,
+
+        String language
 ) {
 }

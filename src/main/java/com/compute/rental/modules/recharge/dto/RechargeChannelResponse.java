@@ -13,6 +13,9 @@ public record RechargeChannelResponse(
         BigDecimal minAmount,
         BigDecimal maxAmount,
         BigDecimal feeRate,
-        Integer sortNo
+        Integer sortNo,
+        String locale,
+        String requestedLocale,
+        Boolean localeFallback
 ) {
 }

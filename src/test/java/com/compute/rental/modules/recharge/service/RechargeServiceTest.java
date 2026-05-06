@@ -22,18 +22,22 @@ import com.compute.rental.common.util.RedisLockClient.RedisLock;
 import com.compute.rental.modules.recharge.dto.AdminApproveRechargeRequest;
 import com.compute.rental.modules.recharge.dto.AdminRejectRechargeRequest;
 import com.compute.rental.modules.recharge.dto.CreateRechargeOrderRequest;
+import com.compute.rental.modules.recharge.dto.RechargeChannelTranslationRequest;
 import com.compute.rental.modules.system.service.SysConfigDefaults;
 import com.compute.rental.modules.system.service.SysConfigService;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.wallet.entity.RechargeChannel;
+import com.compute.rental.modules.wallet.entity.RechargeChannelTranslation;
 import com.compute.rental.modules.wallet.entity.RechargeOrder;
 import com.compute.rental.modules.wallet.entity.UserWallet;
 import com.compute.rental.modules.wallet.entity.WalletTransaction;
 import com.compute.rental.modules.wallet.mapper.RechargeChannelMapper;
+import com.compute.rental.modules.wallet.mapper.RechargeChannelTranslationMapper;
 import com.compute.rental.modules.wallet.mapper.RechargeOrderMapper;
 import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.session.Configuration;
@@ -54,6 +58,9 @@ class RechargeServiceTest {
 
     @Mock
     private RechargeChannelMapper rechargeChannelMapper;
+
+    @Mock
+    private RechargeChannelTranslationMapper rechargeChannelTranslationMapper;
 
     @Mock
     private RechargeOrderMapper rechargeOrderMapper;
@@ -83,6 +90,7 @@ class RechargeServiceTest {
     static void initMybatisPlusTableInfo() {
         var configuration = new Configuration();
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RechargeChannel.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RechargeChannelTranslation.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RechargeOrder.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), UserWallet.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), WalletTransaction.class);
@@ -117,6 +125,43 @@ class RechargeServiceTest {
         assertThat(saved.getApplyAmount()).isEqualByComparingTo("600.00000000");
         assertThat(saved.getExternalTxNo()).isEqualTo("tx001");
         assertThat(response.status()).isEqualTo(RechargeOrderStatus.SUBMITTED.name());
+    }
+
+    @Test
+    void listEnabledChannelsUsesRequestedTranslation() {
+        var channel = channel(new BigDecimal("100.00000000"));
+        var translation = new RechargeChannelTranslation();
+        translation.setChannelId(1L);
+        translation.setLocale("en-US");
+        translation.setChannelName("USDT TRC20");
+        translation.setAccountName("Receiving account");
+        when(rechargeChannelMapper.selectList(any())).thenReturn(List.of(channel));
+        when(rechargeChannelTranslationMapper.selectList(any())).thenReturn(List.of(translation));
+
+        var channels = rechargeService.listEnabledChannels("en-US");
+
+        assertThat(channels).hasSize(1);
+        assertThat(channels.get(0).channelName()).isEqualTo("USDT TRC20");
+        assertThat(channels.get(0).accountName()).isEqualTo("Receiving account");
+        assertThat(channels.get(0).locale()).isEqualTo("en-US");
+        assertThat(channels.get(0).localeFallback()).isFalse();
+    }
+
+    @Test
+    void updateChannelTranslationCreatesEnglishTranslation() {
+        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel(new BigDecimal("100.00000000")));
+        when(rechargeChannelTranslationMapper.selectOne(any())).thenReturn(null);
+
+        var result = rechargeService.updateChannelTranslation(
+                1L,
+                new RechargeChannelTranslationRequest("en-US", "USDT TRC20", "Receiving account"));
+
+        assertThat(result.channelId()).isEqualTo(1L);
+        assertThat(result.locale()).isEqualTo("en-US");
+        assertThat(result.channelName()).isEqualTo("USDT TRC20");
+        assertThat(result.accountName()).isEqualTo("Receiving account");
+        assertThat(result.configured()).isTrue();
+        verify(rechargeChannelTranslationMapper).insert(any(RechargeChannelTranslation.class));
     }
 
     @Test

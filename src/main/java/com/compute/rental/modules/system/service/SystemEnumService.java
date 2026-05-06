@@ -23,6 +23,7 @@ import com.compute.rental.common.enums.RentalSettlementType;
 import com.compute.rental.common.enums.WalletBusinessType;
 import com.compute.rental.common.enums.WalletTransactionType;
 import com.compute.rental.common.enums.WithdrawOrderStatus;
+import com.compute.rental.common.i18n.LanguageResolver;
 import com.compute.rental.modules.system.dto.EnumOptionResponse;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -46,40 +47,44 @@ public class SystemEnumService {
     );
 
     public Map<String, List<EnumOptionResponse>> frontendEnums() {
+        return frontendEnums(LanguageResolver.DEFAULT_LANGUAGE);
+    }
+
+    public Map<String, List<EnumOptionResponse>> frontendEnums(String locale) {
         var result = new LinkedHashMap<String, List<EnumOptionResponse>>();
-        result.put("commonStatus", options(CommonStatus.values()));
-        result.put("blogPublishStatus", options(BlogPublishStatus.values()));
-        result.put("docPublishStatus", options(DocPublishStatus.values()));
-        result.put("docLanguage", options(DocLanguage.values()));
-        result.put("docSection", options(DocSection.values()));
-        result.put("commissionLevel", options(CommissionLevel.values()));
-        result.put("deviceType", options(DeviceType.values()));
-        result.put("emailVerifyScene", options(EmailVerifyScene.values()));
-        result.put("notificationBizType", options(NotificationBizType.values()));
-        result.put("notificationType", options(NotificationType.values()));
-        result.put("profitStatus", options(ProfitStatus.values()));
-        result.put("readStatus", options(ReadStatus.values()));
-        result.put("rechargeOrderStatus", options(RechargeOrderStatus.values()));
-        result.put("recordSettleStatus", options(RecordSettleStatus.values()));
-        result.put("rentalOrderSettlementStatus", options(RentalOrderSettlementStatus.values()));
-        result.put("rentalOrderStatus", options(FRONT_RENTAL_ORDER_STATUSES));
-        result.put("rentalSettlementOrderStatus", options(RentalSettlementOrderStatus.values()));
-        result.put("rentalSettlementType", options(RentalSettlementType.values()));
-        result.put("walletBusinessType", options(WalletBusinessType.values()));
-        result.put("walletTransactionType", options(WalletTransactionType.values()));
-        result.put("withdrawOrderStatus", options(WithdrawOrderStatus.values()));
-        result.put("apiDeployOrderStatus", options(ApiDeployOrderStatus.values()));
-        result.put("apiTokenStatus", options(ApiTokenStatus.values()));
+        result.put("commonStatus", options(CommonStatus.values(), locale));
+        result.put("blogPublishStatus", options(BlogPublishStatus.values(), locale));
+        result.put("docPublishStatus", options(DocPublishStatus.values(), locale));
+        result.put("docLanguage", options(DocLanguage.values(), locale));
+        result.put("docSection", options(DocSection.values(), locale));
+        result.put("commissionLevel", options(CommissionLevel.values(), locale));
+        result.put("deviceType", options(DeviceType.values(), locale));
+        result.put("emailVerifyScene", options(EmailVerifyScene.values(), locale));
+        result.put("notificationBizType", options(NotificationBizType.values(), locale));
+        result.put("notificationType", options(NotificationType.values(), locale));
+        result.put("profitStatus", options(ProfitStatus.values(), locale));
+        result.put("readStatus", options(ReadStatus.values(), locale));
+        result.put("rechargeOrderStatus", options(RechargeOrderStatus.values(), locale));
+        result.put("recordSettleStatus", options(RecordSettleStatus.values(), locale));
+        result.put("rentalOrderSettlementStatus", options(RentalOrderSettlementStatus.values(), locale));
+        result.put("rentalOrderStatus", options(FRONT_RENTAL_ORDER_STATUSES, locale));
+        result.put("rentalSettlementOrderStatus", options(RentalSettlementOrderStatus.values(), locale));
+        result.put("rentalSettlementType", options(RentalSettlementType.values(), locale));
+        result.put("walletBusinessType", options(WalletBusinessType.values(), locale));
+        result.put("walletTransactionType", options(WalletTransactionType.values(), locale));
+        result.put("withdrawOrderStatus", options(WithdrawOrderStatus.values(), locale));
+        result.put("apiDeployOrderStatus", options(ApiDeployOrderStatus.values(), locale));
+        result.put("apiTokenStatus", options(ApiTokenStatus.values(), locale));
         return result;
     }
 
-    private List<EnumOptionResponse> options(Enum<?>[] values) {
-        return options(Arrays.asList(values));
+    private List<EnumOptionResponse> options(Enum<?>[] values, String locale) {
+        return options(Arrays.asList(values), locale);
     }
 
-    private List<EnumOptionResponse> options(List<? extends Enum<?>> values) {
+    private List<EnumOptionResponse> options(List<? extends Enum<?>> values, String locale) {
         return values.stream()
-                .map(value -> new EnumOptionResponse(value.name(), frontendValue(value), label(value)))
+                .map(value -> new EnumOptionResponse(value.name(), frontendValue(value), label(value, locale)))
                 .toList();
     }
 
@@ -95,7 +100,14 @@ public class SystemEnumService {
         return value.name();
     }
 
-    private String label(Enum<?> value) {
+    private String label(Enum<?> value, String locale) {
+        if (LanguageResolver.EN_US.equals(locale)) {
+            return englishLabel(value);
+        }
+        return chineseLabel(value);
+    }
+
+    private String chineseLabel(Enum<?> value) {
         return switch (value.name()) {
             case "ENABLED" -> "启用";
             case "DISABLED" -> "停用";
@@ -169,6 +181,84 @@ public class SystemEnumService {
             case "EARLY_PENALTY" -> "提前终止违约金";
             case "REFUND" -> "退款";
             case "ADJUST" -> "调账";
+            default -> value.name();
+        };
+    }
+
+    private String englishLabel(Enum<?> value) {
+        return switch (value.name()) {
+            case "ENABLED" -> "Enabled";
+            case "DISABLED" -> "Disabled";
+            case "DRAFT" -> "Draft";
+            case "PUBLISHED" -> "Published";
+            case "OFFLINE" -> "Offline";
+            case "ZH_CN" -> "Chinese";
+            case "EN_US" -> "English";
+            case "GUIDE" -> "Guide";
+            case "INTEGRATION" -> "Integration";
+            case "FAQ" -> "FAQ";
+            case "SUPPORT" -> "Support";
+            case "LEVEL_1" -> "Level 1";
+            case "LEVEL_2" -> "Level 2";
+            case "LEVEL_3" -> "Level 3";
+            case "IOS" -> "iOS";
+            case "ANDROID" -> "Android";
+            case "SIGNUP" -> "Sign up";
+            case "RESET_PASSWORD" -> "Reset password";
+            case "FINANCIAL" -> "Financial";
+            case "SYSTEM" -> "System";
+            case "BLOG" -> "Blog";
+            case "NOT_STARTED" -> "Not started";
+            case "RUNNING" -> "Running";
+            case "PAUSED" -> "Paused";
+            case "FINISHED" -> "Finished";
+            case "UNREAD" -> "Unread";
+            case "READ" -> "Read";
+            case "SUBMITTED" -> "Submitted";
+            case "APPROVED" -> "Approved";
+            case "REJECTED" -> "Rejected";
+            case "CANCELED" -> "Canceled";
+            case "PENDING" -> "Pending";
+            case "SETTLED" -> "Settled";
+            case "UNSETTLED" -> "Unsettled";
+            case "SETTLING" -> "Settling";
+            case "PENDING_PAY" -> "Pending payment";
+            case "PENDING_ACTIVATION" -> "Pending activation";
+            case "ACTIVATING" -> "Activating";
+            case "EXPIRED" -> "Expired";
+            case "EARLY_CLOSED" -> "Closed early";
+            case "EXPIRE" -> "Expiration settlement";
+            case "EARLY_TERMINATE" -> "Early termination";
+            case "MANUAL" -> "Manual";
+            case "IN" -> "Credit";
+            case "OUT" -> "Debit";
+            case "FREEZE" -> "Freeze";
+            case "UNFREEZE" -> "Unfreeze";
+            case "PENDING_REVIEW" -> "Pending review";
+            case "PAID" -> "Paid";
+            case "REFUNDED" -> "Refunded";
+            case "GENERATED" -> "Generated";
+            case "ACTIVE" -> "Active";
+            case "REVOKED" -> "Revoked";
+            case "RECHARGE_SUCCESS" -> "Recharge successful";
+            case "WITHDRAW_SUCCESS" -> "Withdraw successful";
+            case "WITHDRAW_REJECTED" -> "Withdraw rejected";
+            case "PROFIT_SUCCESS" -> "Profit credited";
+            case "COMMISSION_SUCCESS" -> "Commission credited";
+            case "API_ACTIVATED" -> "API activated";
+            case "ORDER_CANCELED" -> "Order canceled";
+            case "ORDER_EXPIRED" -> "Order expired";
+            case "BLOG_UPDATE" -> "Blog update";
+            case "RECHARGE" -> "Recharge";
+            case "WITHDRAW" -> "Withdraw";
+            case "RENT_PAY" -> "Rental payment";
+            case "API_DEPLOY_FEE" -> "API deployment fee";
+            case "RENT_PROFIT" -> "Rental profit";
+            case "COMMISSION_PROFIT" -> "Referral commission";
+            case "SETTLEMENT" -> "Settlement";
+            case "EARLY_PENALTY" -> "Early termination penalty";
+            case "REFUND" -> "Refund";
+            case "ADJUST" -> "Adjustment";
             default -> value.name();
         };
     }

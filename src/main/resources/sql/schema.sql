@@ -142,6 +142,20 @@ CREATE TABLE `recharge_channel` (
   KEY `idx_status_sort` (`status`, `sort_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='充值渠道表';
 
+CREATE TABLE `recharge_channel_translation` (
+  `id`           BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `channel_id`   BIGINT NOT NULL COMMENT '充值渠道ID',
+  `locale`       VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `channel_name` VARCHAR(64) DEFAULT NULL COMMENT '渠道展示名称',
+  `account_name` VARCHAR(128) DEFAULT NULL COMMENT '收款名称',
+  `created_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_recharge_channel_translation_locale` (`channel_id`, `locale`),
+  KEY `idx_recharge_channel_translation_locale` (`locale`),
+  CONSTRAINT `fk_recharge_channel_translation_channel` FOREIGN KEY (`channel_id`) REFERENCES `recharge_channel` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='充值渠道多语言表';
+
 CREATE TABLE `recharge_order` (
   `id`                       BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `recharge_no`              VARCHAR(64) NOT NULL COMMENT '充值单号',
@@ -629,6 +643,20 @@ CREATE TABLE `sys_notification` (
   CONSTRAINT `fk_notification_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户站内信通知表';
 
+CREATE TABLE `sys_notification_translation` (
+  `id`              BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `notification_id` BIGINT NOT NULL COMMENT '站内信通知ID',
+  `locale`          VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `title`           VARCHAR(128) DEFAULT NULL COMMENT '通知标题',
+  `content`         TEXT DEFAULT NULL COMMENT '通知内容',
+  `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_notification_translation_locale` (`notification_id`, `locale`),
+  KEY `idx_notification_translation_locale` (`locale`),
+  CONSTRAINT `fk_notification_translation_notification` FOREIGN KEY (`notification_id`) REFERENCES `sys_notification` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户站内信通知多语言表';
+
 CREATE TABLE `scheduler_log` (
   `id`            BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `task_name`     VARCHAR(64) NOT NULL COMMENT '任务名称，如 daily_profit/auto_pause/activation_timeout',
@@ -720,6 +748,47 @@ CREATE TABLE `blog_post_tag` (
   CONSTRAINT `fk_blog_post_tag_tag` FOREIGN KEY (`tag_id`) REFERENCES `blog_tag` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文章标签关联表';
 
+CREATE TABLE `blog_category_translation` (
+  `id`            BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `category_id`   BIGINT NOT NULL COMMENT '博客分类ID',
+  `locale`        VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `category_name` VARCHAR(64) NOT NULL COMMENT '分类展示名称',
+  `created_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_blog_category_translation_locale` (`category_id`, `locale`),
+  KEY `idx_blog_category_translation_locale` (`locale`),
+  CONSTRAINT `fk_blog_category_translation_category` FOREIGN KEY (`category_id`) REFERENCES `blog_category` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='博客分类多语言表';
+
+CREATE TABLE `blog_tag_translation` (
+  `id`         BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `tag_id`     BIGINT NOT NULL COMMENT '博客标签ID',
+  `locale`     VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `tag_name`   VARCHAR(64) NOT NULL COMMENT '标签展示名称',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_blog_tag_translation_locale` (`tag_id`, `locale`),
+  KEY `idx_blog_tag_translation_locale` (`locale`),
+  CONSTRAINT `fk_blog_tag_translation_tag` FOREIGN KEY (`tag_id`) REFERENCES `blog_tag` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='博客标签多语言表';
+
+CREATE TABLE `blog_post_translation` (
+  `id`               BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `post_id`          BIGINT NOT NULL COMMENT '博客文章ID',
+  `locale`           VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `title`            VARCHAR(255) NOT NULL COMMENT '文章标题',
+  `summary`          VARCHAR(500) DEFAULT NULL COMMENT '文章摘要',
+  `content_markdown` LONGTEXT DEFAULT NULL COMMENT '文章正文Markdown内容',
+  `created_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_blog_post_translation_locale` (`post_id`, `locale`),
+  KEY `idx_blog_post_translation_locale` (`locale`),
+  CONSTRAINT `fk_blog_post_translation_post` FOREIGN KEY (`post_id`) REFERENCES `blog_post` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='博客文章多语言表';
+
 CREATE TABLE `doc_category` (
   `id`            BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `parent_id`     BIGINT DEFAULT NULL COMMENT '父级分类ID，NULL表示一级分类',
@@ -766,5 +835,71 @@ CREATE TABLE `doc_article` (
   KEY `idx_published_at` (`published_at`),
   CONSTRAINT `fk_doc_article_category` FOREIGN KEY (`category_id`) REFERENCES `doc_category` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档文章表';
+
+CREATE TABLE `region_translation` (
+  `id`          BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `region_id`   BIGINT NOT NULL COMMENT '地区ID',
+  `locale`      VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `region_name` VARCHAR(64) NOT NULL COMMENT '地区展示名称',
+  `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_region_translation_locale` (`region_id`, `locale`),
+  KEY `idx_region_translation_locale` (`locale`),
+  CONSTRAINT `fk_region_translation_region` FOREIGN KEY (`region_id`) REFERENCES `region` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='地区多语言表';
+
+CREATE TABLE `gpu_model_translation` (
+  `id`           BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `gpu_model_id` BIGINT NOT NULL COMMENT 'GPU型号ID',
+  `locale`       VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `model_name`   VARCHAR(64) NOT NULL COMMENT 'GPU型号展示名称',
+  `created_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_gpu_model_translation_locale` (`gpu_model_id`, `locale`),
+  KEY `idx_gpu_model_translation_locale` (`locale`),
+  CONSTRAINT `fk_gpu_model_translation_model` FOREIGN KEY (`gpu_model_id`) REFERENCES `gpu_model` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='GPU型号多语言表';
+
+CREATE TABLE `product_translation` (
+  `id`           BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `product_id`   BIGINT NOT NULL COMMENT '商品ID',
+  `locale`       VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `product_name` VARCHAR(128) NOT NULL COMMENT '商品展示名称',
+  `created_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_product_translation_locale` (`product_id`, `locale`),
+  KEY `idx_product_translation_locale` (`locale`),
+  CONSTRAINT `fk_product_translation_product` FOREIGN KEY (`product_id`) REFERENCES `product` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品多语言表';
+
+CREATE TABLE `ai_model_translation` (
+  `id`          BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `ai_model_id` BIGINT NOT NULL COMMENT 'AI模型ID',
+  `locale`      VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `model_name`  VARCHAR(128) NOT NULL COMMENT 'AI模型展示名称',
+  `vendor_name` VARCHAR(64) DEFAULT NULL COMMENT '厂商展示名称',
+  `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ai_model_translation_locale` (`ai_model_id`, `locale`),
+  KEY `idx_ai_model_translation_locale` (`locale`),
+  CONSTRAINT `fk_ai_model_translation_model` FOREIGN KEY (`ai_model_id`) REFERENCES `ai_model` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI模型多语言表';
+
+CREATE TABLE `rental_cycle_rule_translation` (
+  `id`            BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `cycle_rule_id` BIGINT NOT NULL COMMENT '租赁周期规则ID',
+  `locale`        VARCHAR(16) NOT NULL COMMENT '语言：zh-CN/en-US',
+  `cycle_name`    VARCHAR(64) NOT NULL COMMENT '周期展示名称',
+  `created_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_cycle_rule_translation_locale` (`cycle_rule_id`, `locale`),
+  KEY `idx_cycle_rule_translation_locale` (`locale`),
+  CONSTRAINT `fk_cycle_rule_translation_rule` FOREIGN KEY (`cycle_rule_id`) REFERENCES `rental_cycle_rule` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='租赁周期规则多语言表';
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -5,10 +5,16 @@ import com.compute.rental.common.enums.CommonStatus;
 import com.compute.rental.common.page.PageResult;
 import com.compute.rental.modules.blog.dto.BlogCategoryRequest;
 import com.compute.rental.modules.blog.dto.BlogCategoryResponse;
+import com.compute.rental.modules.blog.dto.BlogCategoryTranslationRequest;
+import com.compute.rental.modules.blog.dto.BlogCategoryTranslationResponse;
 import com.compute.rental.modules.blog.dto.BlogPostRequest;
 import com.compute.rental.modules.blog.dto.BlogPostResponse;
+import com.compute.rental.modules.blog.dto.BlogPostTranslationRequest;
+import com.compute.rental.modules.blog.dto.BlogPostTranslationResponse;
 import com.compute.rental.modules.blog.dto.BlogTagRequest;
 import com.compute.rental.modules.blog.dto.BlogTagResponse;
+import com.compute.rental.modules.blog.dto.BlogTagTranslationRequest;
+import com.compute.rental.modules.blog.dto.BlogTagTranslationResponse;
 import com.compute.rental.modules.blog.service.BlogService;
 import com.compute.rental.modules.system.service.AdminLogService;
 import com.compute.rental.security.CurrentUser;
@@ -17,6 +23,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -71,6 +78,24 @@ public class AdminBlogController {
         return ApiResponse.success(blogService.updateCategory(id, request, admin.id(), adminLogService.clientIp(httpRequest)));
     }
 
+    @Operation(summary = "Admin blog category translations")
+    @GetMapping("/categories/{id}/translations")
+    public ApiResponse<List<BlogCategoryTranslationResponse>> categoryTranslations(@PathVariable Long id) {
+        return ApiResponse.success(blogService.listCategoryTranslations(id));
+    }
+
+    @Operation(summary = "Update blog category translation")
+    @PutMapping("/categories/{id}/translations")
+    public ApiResponse<BlogCategoryTranslationResponse> updateCategoryTranslation(
+            @PathVariable Long id,
+            @Valid @RequestBody BlogCategoryTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        return ApiResponse.success(blogService.updateCategoryTranslation(id, request, admin.id(),
+                adminLogService.clientIp(httpRequest)));
+    }
+
     @Operation(summary = "Enable blog category")
     @PostMapping("/categories/{id}/enable")
     public ApiResponse<BlogCategoryResponse> enableCategory(@PathVariable Long id, HttpServletRequest httpRequest) {
@@ -118,6 +143,24 @@ public class AdminBlogController {
         return ApiResponse.success(blogService.updateTag(id, request, admin.id(), adminLogService.clientIp(httpRequest)));
     }
 
+    @Operation(summary = "Admin blog tag translations")
+    @GetMapping("/tags/{id}/translations")
+    public ApiResponse<List<BlogTagTranslationResponse>> tagTranslations(@PathVariable Long id) {
+        return ApiResponse.success(blogService.listTagTranslations(id));
+    }
+
+    @Operation(summary = "Update blog tag translation")
+    @PutMapping("/tags/{id}/translations")
+    public ApiResponse<BlogTagTranslationResponse> updateTagTranslation(
+            @PathVariable Long id,
+            @Valid @RequestBody BlogTagTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        return ApiResponse.success(blogService.updateTagTranslation(id, request, admin.id(),
+                adminLogService.clientIp(httpRequest)));
+    }
+
     @Operation(summary = "Enable blog tag")
     @PostMapping("/tags/{id}/enable")
     public ApiResponse<BlogTagResponse> enableTag(@PathVariable Long id, HttpServletRequest httpRequest) {
@@ -157,6 +200,12 @@ public class AdminBlogController {
         return ApiResponse.success(blogService.adminPost(id));
     }
 
+    @Operation(summary = "Admin blog post translations")
+    @GetMapping("/posts/{id}/translations")
+    public ApiResponse<List<BlogPostTranslationResponse>> postTranslations(@PathVariable Long id) {
+        return ApiResponse.success(blogService.listPostTranslations(id));
+    }
+
     @Operation(summary = "Create blog post")
     @PostMapping("/posts")
     public ApiResponse<BlogPostResponse> createPost(
@@ -176,6 +225,18 @@ public class AdminBlogController {
     ) {
         var admin = CurrentUser.requiredAdmin();
         return ApiResponse.success(blogService.updatePost(id, request, admin.id(), adminLogService.clientIp(httpRequest)));
+    }
+
+    @Operation(summary = "Update blog post translation")
+    @PutMapping("/posts/{id}/translations")
+    public ApiResponse<BlogPostTranslationResponse> updatePostTranslation(
+            @PathVariable Long id,
+            @Valid @RequestBody BlogPostTranslationRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        var admin = CurrentUser.requiredAdmin();
+        return ApiResponse.success(blogService.updatePostTranslation(id, request, admin.id(),
+                adminLogService.clientIp(httpRequest)));
     }
 
     @Operation(summary = "Publish blog post")

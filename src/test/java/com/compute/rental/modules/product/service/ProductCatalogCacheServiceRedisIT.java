@@ -61,13 +61,13 @@ class ProductCatalogCacheServiceRedisIT {
     @Test
     void shouldRoundTripAndEvictCatalogCacheWithRealRedis() {
         var catalogKey = TEST_CATALOG_PREFIX + "regions";
-        var cachedRegions = List.of(new RegionResponse(1L, "HK", "Hong Kong"));
+        var cachedRegions = List.of(new RegionResponse(1L, "HK", "Hong Kong", "zh-CN", "zh-CN", false));
         service.put(catalogKey, cachedRegions);
 
         var result = service.get(catalogKey, new TypeReference<List<RegionResponse>>() {
         });
 
-        assertThat(result).containsExactly(new RegionResponse(1L, "HK", "Hong Kong"));
+        assertThat(result).containsExactly(new RegionResponse(1L, "HK", "Hong Kong", "zh-CN", "zh-CN", false));
         assertThat(redisTemplate.getExpire(catalogKey)).isPositive();
 
         redisTemplate.opsForValue().set(OUTSIDE_KEY, "keep");
