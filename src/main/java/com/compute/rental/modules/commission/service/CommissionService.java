@@ -40,6 +40,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 public class CommissionService {
@@ -100,6 +101,12 @@ public class CommissionService {
     }
 
     public PageResult<CommissionRecordResponse> pageUserRecords(Long userId, CommissionRecordQueryRequest request) {
+        var keyword = request.normalizedKeyword();
+        var matchedSourceUserIds = findMatchedSourceUserIds(keyword);
+        if (StringUtils.hasText(keyword) && matchedSourceUserIds.isEmpty()) {
+            return new PageResult<>(List.of(), 0, request.current(), request.size());
+        }
+
         var page = new Page<CommissionRecord>(request.current(), request.size());
         var wrapper = new LambdaQueryWrapper<CommissionRecord>()
                 .eq(CommissionRecord::getBenefitUserId, userId)
@@ -109,12 +116,37 @@ public class CommissionService {
                 .ge(request.startTime() != null, CommissionRecord::getCreatedAt, request.startTime())
                 .le(request.endTime() != null, CommissionRecord::getCreatedAt, request.endTime())
                 .orderByDesc(CommissionRecord::getId);
+        applyKeywordFilter(wrapper, matchedSourceUserIds);
         var result = commissionRecordMapper.selectPage(page, wrapper);
         var userNames = userNameMap(result.getRecords().stream().map(CommissionRecord::getSourceUserId).toList());
         return new PageResult<>(result.getRecords().stream()
                 .map(record -> toResponse(record, userNames.get(record.getSourceUserId())))
                 .toList(),
                 result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
+    private void applyKeywordFilter(
+            LambdaQueryWrapper<CommissionRecord> wrapper,
+            List<Long> matchedSourceUserIds
+    ) {
+        if (matchedSourceUserIds == null) {
+            return;
+        }
+        if (!matchedSourceUserIds.isEmpty()) {
+            wrapper.in(CommissionRecord::getSourceUserId, matchedSourceUserIds);
+        }
+    }
+
+    private List<Long> findMatchedSourceUserIds(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return null;
+        }
+        return appUserMapper.selectList(new LambdaQueryWrapper<AppUser>()
+                        .select(AppUser::getId)
+                        .like(AppUser::getUserName, keyword))
+                .stream()
+                .map(AppUser::getId)
+                .toList();
     }
 
     public CommissionSummaryResponse summary(Long userId) {

@@ -9,15 +9,19 @@ import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.compute.rental.common.enums.RecordSettleStatus;
 import com.compute.rental.common.enums.WalletBusinessType;
+import com.compute.rental.modules.commission.dto.CommissionRecordQueryRequest;
 import com.compute.rental.modules.commission.entity.CommissionRecord;
 import com.compute.rental.modules.commission.entity.CommissionRule;
 import com.compute.rental.modules.commission.mapper.CommissionRecordMapper;
 import com.compute.rental.modules.commission.mapper.CommissionRuleMapper;
 import com.compute.rental.modules.order.entity.RentalProfitRecord;
 import com.compute.rental.modules.order.mapper.RentalProfitRecordMapper;
+import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.entity.UserReferralRelation;
+import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.user.mapper.UserReferralRelationMapper;
 import com.compute.rental.modules.wallet.entity.UserWallet;
 import com.compute.rental.modules.wallet.entity.WalletTransaction;
@@ -54,6 +58,9 @@ class CommissionServiceTest {
     private UserReferralRelationMapper referralRelationMapper;
 
     @Mock
+    private AppUserMapper appUserMapper;
+
+    @Mock
     private UserWalletMapper userWalletMapper;
 
     @Mock
@@ -71,6 +78,7 @@ class CommissionServiceTest {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), CommissionRule.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), CommissionRecord.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RentalProfitRecord.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), AppUser.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), UserReferralRelation.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), UserWallet.class);
     }
@@ -157,6 +165,63 @@ class CommissionServiceTest {
 
         verify(referralRelationMapper, never()).selectOne(any(Wrapper.class));
         verify(walletService, never()).creditWithIdempotencyKey(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void pageUserRecordsShouldReturnEmptyWhenKeywordHasNoUserNameMatch() {
+        when(appUserMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+
+        var result = commissionService.pageUserRecords(10L, new CommissionRecordQueryRequest(
+                1,
+                10,
+                null,
+                null,
+                null,
+                null,
+                "missing-user"
+        ));
+
+        assertThat(result.records()).isEmpty();
+        assertThat(result.total()).isZero();
+        verify(commissionRecordMapper, never()).selectPage(any(Page.class), any(Wrapper.class));
+    }
+
+    @Test
+    void pageUserRecordsShouldApplyKeywordUserNameMatches() {
+        var sourceUser = new AppUser();
+        sourceUser.setId(20L);
+        sourceUser.setUserId("U020");
+        sourceUser.setUserName("alice");
+        var record = new CommissionRecord();
+        record.setId(40L);
+        record.setBenefitUserId(10L);
+        record.setSourceUserId(20L);
+        record.setSourceOrderId(30L);
+        record.setLevelNo(1);
+        record.setStatus(RecordSettleStatus.SETTLED.name());
+        record.setSourceProfitAmount(new BigDecimal("100.00000000"));
+        record.setCommissionRateSnapshot(new BigDecimal("0.2000"));
+        record.setCommissionAmount(new BigDecimal("20.00000000"));
+        when(appUserMapper.selectList(any(Wrapper.class))).thenReturn(List.of(sourceUser));
+        var page = new Page<CommissionRecord>(1, 10);
+        page.setRecords(List.of(record));
+        page.setTotal(1);
+        when(commissionRecordMapper.selectPage(any(Page.class), any(Wrapper.class))).thenReturn(page);
+        when(appUserMapper.selectBatchIds(List.of(20L))).thenReturn(List.of(sourceUser));
+
+        var result = commissionService.pageUserRecords(10L, new CommissionRecordQueryRequest(
+                1,
+                10,
+                null,
+                null,
+                null,
+                null,
+                "alice"
+        ));
+
+        assertThat(result.records()).hasSize(1);
+        assertThat(result.records().get(0).sourceUserId()).isEqualTo(20L);
+        assertThat(result.records().get(0).userName()).isEqualTo("alice");
     }
 
     private RentalProfitRecord settledProfit(Long id, Long userId, BigDecimal amount) {

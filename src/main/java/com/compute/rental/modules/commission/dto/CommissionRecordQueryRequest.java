@@ -22,7 +22,9 @@ public record CommissionRecordQueryRequest(
         LocalDateTime startTime,
 
         @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-        LocalDateTime endTime
+        LocalDateTime endTime,
+
+        String keyword
 ) {
 
     public long current() {
@@ -31,5 +33,9 @@ public record CommissionRecordQueryRequest(
 
     public long size() {
         return pageSize == null ? 10L : pageSize.longValue();
+    }
+
+    public String normalizedKeyword() {
+        return keyword == null ? null : keyword.trim();
     }
 }
