@@ -12,7 +12,9 @@ public record TeamMemberQueryRequest(
         Integer pageSize,
 
         @Min(1)
-        Integer levelDepth
+        Integer levelDepth,
+
+        String keyword
 ) {
 
     public long current() {
@@ -21,5 +23,9 @@ public record TeamMemberQueryRequest(
 
     public long size() {
         return pageSize == null ? 10L : pageSize.longValue();
+    }
+
+    public String normalizedKeyword() {
+        return keyword == null ? null : keyword.trim();
     }
 }

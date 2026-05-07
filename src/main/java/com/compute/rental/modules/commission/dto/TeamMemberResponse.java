@@ -7,9 +7,13 @@ public record TeamMemberResponse(
         String userId,
         @Schema(description = "用户名称")
         String userName,
-        String email,
+        String avatarKey,
         Integer status,
         Integer levelDepth,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        @Schema(description = "该成员的直接和间接下级总数")
+        Long subTeamCount,
+        @Schema(description = "直接上级公开用户 ID")
+        String parentId
 ) {
 }

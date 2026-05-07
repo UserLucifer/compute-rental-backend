@@ -8,6 +8,7 @@ public record UserMeResponse(
         String email,
         String userName,
         String avatarKey,
+        String inviteCode,
         Integer status,
         LocalDateTime createdAt
 ) {
