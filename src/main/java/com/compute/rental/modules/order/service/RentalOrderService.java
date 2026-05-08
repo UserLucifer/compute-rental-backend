@@ -292,21 +292,27 @@ public class RentalOrderService {
         var updatedCredential = apiCredentialMapper.update(null, new LambdaUpdateWrapper<ApiCredential>()
                 .eq(ApiCredential::getId, credential.getId())
                 .eq(ApiCredential::getTokenStatus, ApiTokenStatus.GENERATED.name())
-                .set(ApiCredential::getTokenStatus, ApiTokenStatus.ACTIVATING.name())
+                .set(ApiCredential::getTokenStatus, ApiTokenStatus.ACTIVE.name())
                 .set(ApiCredential::getActivationPaidAt, now)
                 .set(ApiCredential::getActivatedAt, now)
                 .set(ApiCredential::getAutoPauseAt, autoPauseAt)
+                .set(ApiCredential::getStartedAt, now)
                 .set(ApiCredential::getUpdatedAt, now));
         if (updatedCredential == 0) {
             throw new BusinessException(ErrorCode.API_CREDENTIAL_STATUS_CHANGED);
         }
+        var profitEndAt = now.plusDays(order.getCycleDaysSnapshot());
         var updatedOrder = rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
                 .eq(RentalOrder::getId, order.getId())
                 .eq(RentalOrder::getOrderStatus, RentalOrderStatus.PENDING_ACTIVATION.name())
-                .set(RentalOrder::getOrderStatus, RentalOrderStatus.ACTIVATING.name())
+                .set(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name())
+                .set(RentalOrder::getProfitStatus, ProfitStatus.RUNNING.name())
                 .set(RentalOrder::getDeployFeePaidAt, now)
                 .set(RentalOrder::getActivatedAt, now)
                 .set(RentalOrder::getAutoPauseAt, autoPauseAt)
+                .set(RentalOrder::getStartedAt, now)
+                .set(RentalOrder::getProfitStartAt, now)
+                .set(RentalOrder::getProfitEndAt, profitEndAt)
                 .set(RentalOrder::getUpdatedAt, now));
         if (updatedOrder == 0) {
             throw new BusinessException(ErrorCode.CONCURRENT_UPDATE_FAILED, "租赁订单状态已变化");
@@ -342,15 +348,16 @@ public class RentalOrderService {
             throw new BusinessException(ErrorCode.API_CREDENTIAL_NOT_PAUSED);
         }
         var now = DateTimeUtils.now();
-        var profitEndAt = now.plusDays(order.getCycleDaysSnapshot());
+        var profitStartAt = order.getProfitStartAt() == null ? now : order.getProfitStartAt();
+        var profitEndAt = order.getProfitEndAt() == null ? profitStartAt.plusDays(order.getCycleDaysSnapshot()) : order.getProfitEndAt();
         var updatedOrder = rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
                 .eq(RentalOrder::getId, order.getId())
                 .eq(RentalOrder::getOrderStatus, RentalOrderStatus.PAUSED.name())
                 .set(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name())
                 .set(RentalOrder::getProfitStatus, ProfitStatus.RUNNING.name())
-                .set(RentalOrder::getStartedAt, now)
-                .set(RentalOrder::getProfitStartAt, now)
-                .set(RentalOrder::getProfitEndAt, profitEndAt)
+                .set(order.getStartedAt() == null, RentalOrder::getStartedAt, now)
+                .set(order.getProfitStartAt() == null, RentalOrder::getProfitStartAt, profitStartAt)
+                .set(order.getProfitEndAt() == null, RentalOrder::getProfitEndAt, profitEndAt)
                 .set(RentalOrder::getUpdatedAt, now));
         if (updatedOrder == 0) {
             throw new BusinessException(ErrorCode.CONCURRENT_UPDATE_FAILED, "租赁订单状态已变化");
@@ -359,7 +366,7 @@ public class RentalOrderService {
                 .eq(ApiCredential::getId, credential.getId())
                 .eq(ApiCredential::getTokenStatus, ApiTokenStatus.PAUSED.name())
                 .set(ApiCredential::getTokenStatus, ApiTokenStatus.ACTIVE.name())
-                .set(ApiCredential::getStartedAt, now)
+                .set(credential.getStartedAt() == null, ApiCredential::getStartedAt, now)
                 .set(ApiCredential::getUpdatedAt, now));
         if (updatedCredential == 0) {
             throw new BusinessException(ErrorCode.API_CREDENTIAL_STATUS_CHANGED);

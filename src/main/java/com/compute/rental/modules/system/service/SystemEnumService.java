@@ -145,8 +145,8 @@ public class SystemEnumService {
             case "UNSETTLED" -> "未结算";
             case "SETTLING" -> "结算中";
             case "PENDING_PAY" -> "待支付";
-            case "PENDING_ACTIVATION" -> "待激活";
-            case "ACTIVATING" -> "激活中";
+            case "PENDING_ACTIVATION" -> "待支付部署费";
+            case "ACTIVATING" -> "部署中";
             case "EXPIRED" -> "已到期";
             case "EARLY_CLOSED" -> "提前关闭";
             case "EXPIRE" -> "到期结算";
@@ -223,8 +223,8 @@ public class SystemEnumService {
             case "UNSETTLED" -> "Unsettled";
             case "SETTLING" -> "Settling";
             case "PENDING_PAY" -> "Pending payment";
-            case "PENDING_ACTIVATION" -> "Pending activation";
-            case "ACTIVATING" -> "Activating";
+            case "PENDING_ACTIVATION" -> "Pending deployment payment";
+            case "ACTIVATING" -> "Deploying";
             case "EXPIRED" -> "Expired";
             case "EARLY_CLOSED" -> "Closed early";
             case "EXPIRE" -> "Expiration settlement";

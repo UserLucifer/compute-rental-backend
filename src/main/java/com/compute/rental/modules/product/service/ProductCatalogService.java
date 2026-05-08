@@ -158,7 +158,7 @@ public class ProductCatalogService {
                 .eq(Product::getStatus, CommonStatus.ENABLED.value())
                 .eq(request.regionId() != null, Product::getRegionId, request.regionId())
                 .eq(request.gpuModelId() != null, Product::getGpuModelId, request.gpuModelId())
-                .orderByAsc(Product::getSortNo);
+                .last("ORDER BY CASE WHEN available_stock > 0 THEN 0 ELSE 1 END ASC, sort_no ASC, id DESC");
         var result = productMapper.selectPage(page, wrapper);
         var products = result.getRecords();
         var regionMap = regionMap(products);

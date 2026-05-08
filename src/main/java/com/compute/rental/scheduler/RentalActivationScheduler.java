@@ -111,7 +111,7 @@ public class RentalActivationScheduler {
         var errors = new ArrayList<String>();
         var now = DateTimeUtils.now();
         var orders = rentalOrderMapper.selectList(new LambdaQueryWrapper<RentalOrder>()
-                .eq(RentalOrder::getOrderStatus, RentalOrderStatus.ACTIVATING.name())
+                .in(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name(), RentalOrderStatus.ACTIVATING.name())
                 .le(RentalOrder::getAutoPauseAt, now)
                 .orderByAsc(RentalOrder::getId));
         for (var order : orders) {

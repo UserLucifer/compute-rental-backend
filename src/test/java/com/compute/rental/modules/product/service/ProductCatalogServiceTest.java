@@ -158,7 +158,8 @@ class ProductCatalogServiceTest {
 
         var wrapperCaptor = ArgumentCaptor.forClass(Wrapper.class);
         verify(productMapper).selectPage(any(Page.class), wrapperCaptor.capture());
-        assertThat(wrapperCaptor.getValue().getSqlSegment()).contains("status", "region_id", "gpu_model_id");
+        assertThat(wrapperCaptor.getValue().getSqlSegment())
+                .contains("status", "region_id", "gpu_model_id", "available_stock", "sort_no");
         verify(productCatalogCacheService).put(eq(RedisKeys.catalogProductPage(1, 10, 1L, 2L, "zh-CN")), eq(result));
     }
 

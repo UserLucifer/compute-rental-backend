@@ -15,17 +15,17 @@ public enum RentalOrderStatus {
     PAID,
 
     /**
-     * Machine fee paid and API credential generated, waiting for deploy fee payment or activation.
+     * Machine fee paid and API credential generated, waiting for deploy fee payment.
      */
     PENDING_ACTIVATION,
 
     /**
-     * Deploy fee paid, API token is activating and waiting for the auto-pause task.
+     * Legacy short-lived status. Deploy fee payment now starts the rental immediately.
      */
     ACTIVATING,
 
     /**
-     * API activation window ended; user can start the rental to begin profit generation.
+     * Rental was auto-paused after deployment; user can start it again to resume profit generation.
      */
     PAUSED,
 

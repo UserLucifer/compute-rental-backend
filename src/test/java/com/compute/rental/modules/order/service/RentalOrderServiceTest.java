@@ -310,7 +310,7 @@ class RentalOrderServiceTest {
     }
 
     @Test
-    void payDeployFeeShouldActivateOrderAndCredential() {
+    void payDeployFeeShouldStartOrderAndCredentialImmediately() {
         when(rentalOrderMapper.selectOne(any(Wrapper.class))).thenReturn(order(RentalOrderStatus.PENDING_ACTIVATION));
         when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.GENERATED));
         when(apiDeployOrderMapper.selectOne(any(Wrapper.class))).thenReturn(null, deployOrder(ApiDeployOrderStatus.PAID));
@@ -351,8 +351,8 @@ class RentalOrderServiceTest {
 
     @Test
     void repeatedDeployPayShouldReturnPaidOrderWithoutDebitAgain() {
-        when(rentalOrderMapper.selectOne(any(Wrapper.class))).thenReturn(order(RentalOrderStatus.ACTIVATING));
-        when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.ACTIVATING));
+        when(rentalOrderMapper.selectOne(any(Wrapper.class))).thenReturn(order(RentalOrderStatus.RUNNING));
+        when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.ACTIVE));
         when(apiDeployOrderMapper.selectOne(any(Wrapper.class))).thenReturn(deployOrder(ApiDeployOrderStatus.PAID));
 
         var response = rentalOrderService.payDeployFee(10L, "RO001");
@@ -379,10 +379,11 @@ class RentalOrderServiceTest {
     void startPausedOrderShouldSetRunningAndProfitWindow() {
         var paused = order(RentalOrderStatus.PAUSED);
         var running = order(RentalOrderStatus.RUNNING);
+        var profitStartAt = java.time.LocalDateTime.now().minusHours(25);
         running.setProfitStatus(ProfitStatus.RUNNING.name());
-        running.setStartedAt(java.time.LocalDateTime.now());
-        running.setProfitStartAt(running.getStartedAt());
-        running.setProfitEndAt(running.getStartedAt().plusDays(30));
+        running.setStartedAt(profitStartAt);
+        running.setProfitStartAt(profitStartAt);
+        running.setProfitEndAt(profitStartAt.plusDays(30));
         when(rentalOrderMapper.selectOne(any(Wrapper.class))).thenReturn(paused, running);
         when(apiCredentialMapper.selectOne(any(Wrapper.class)))
                 .thenReturn(credential(ApiTokenStatus.PAUSED), credential(ApiTokenStatus.ACTIVE));
@@ -393,8 +394,8 @@ class RentalOrderServiceTest {
 
         assertThat(response.orderStatus()).isEqualTo(RentalOrderStatus.RUNNING.name());
         assertThat(response.profitStatus()).isEqualTo(ProfitStatus.RUNNING.name());
-        assertThat(response.profitStartAt()).isNotNull();
-        assertThat(response.profitEndAt()).isEqualTo(response.profitStartAt().plusDays(30));
+        assertThat(response.profitStartAt()).isEqualTo(profitStartAt);
+        assertThat(response.profitEndAt()).isEqualTo(profitStartAt.plusDays(30));
     }
 
     @Test

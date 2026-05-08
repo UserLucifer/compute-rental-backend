@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.compute.rental.common.enums.ApiTokenStatus;
 import com.compute.rental.common.enums.ErrorCode;
+import com.compute.rental.common.enums.ProfitStatus;
 import com.compute.rental.common.enums.RentalOrderStatus;
 import com.compute.rental.common.enums.WalletBusinessType;
 import com.compute.rental.common.exception.BusinessException;
@@ -74,20 +75,21 @@ public class RentalActivationSchedulerProcessor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void autoPause(Long orderId, LocalDateTime now) {
         var order = rentalOrderMapper.selectById(orderId);
-        if (order == null || !RentalOrderStatus.ACTIVATING.name().equals(order.getOrderStatus())
+        if (order == null || !isAutoPauseCandidate(order.getOrderStatus())
                 || order.getAutoPauseAt() == null || order.getAutoPauseAt().isAfter(now)) {
             return;
         }
         var credential = apiCredentialMapper.selectOne(new LambdaQueryWrapper<ApiCredential>()
                 .eq(ApiCredential::getRentalOrderId, order.getId())
                 .last("LIMIT 1"));
-        if (credential == null || !ApiTokenStatus.ACTIVATING.name().equals(credential.getTokenStatus())) {
+        if (credential == null || !isAutoPauseCredential(credential.getTokenStatus())) {
             throw new BusinessException(ErrorCode.API_CREDENTIAL_NOT_ACTIVE);
         }
         var updatedOrder = rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
                 .eq(RentalOrder::getId, order.getId())
-                .eq(RentalOrder::getOrderStatus, RentalOrderStatus.ACTIVATING.name())
+                .in(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name(), RentalOrderStatus.ACTIVATING.name())
                 .set(RentalOrder::getOrderStatus, RentalOrderStatus.PAUSED.name())
+                .set(RentalOrder::getProfitStatus, ProfitStatus.PAUSED.name())
                 .set(RentalOrder::getPausedAt, now)
                 .set(RentalOrder::getUpdatedAt, now));
         if (updatedOrder == 0) {
@@ -95,12 +97,22 @@ public class RentalActivationSchedulerProcessor {
         }
         var updatedCredential = apiCredentialMapper.update(null, new LambdaUpdateWrapper<ApiCredential>()
                 .eq(ApiCredential::getId, credential.getId())
-                .eq(ApiCredential::getTokenStatus, ApiTokenStatus.ACTIVATING.name())
+                .in(ApiCredential::getTokenStatus, ApiTokenStatus.ACTIVE.name(), ApiTokenStatus.ACTIVATING.name())
                 .set(ApiCredential::getTokenStatus, ApiTokenStatus.PAUSED.name())
                 .set(ApiCredential::getPausedAt, now)
                 .set(ApiCredential::getUpdatedAt, now));
         if (updatedCredential == 0) {
             throw new BusinessException(ErrorCode.API_CREDENTIAL_STATUS_CHANGED);
         }
+    }
+
+    private boolean isAutoPauseCandidate(String orderStatus) {
+        return RentalOrderStatus.RUNNING.name().equals(orderStatus)
+                || RentalOrderStatus.ACTIVATING.name().equals(orderStatus);
+    }
+
+    private boolean isAutoPauseCredential(String tokenStatus) {
+        return ApiTokenStatus.ACTIVE.name().equals(tokenStatus)
+                || ApiTokenStatus.ACTIVATING.name().equals(tokenStatus);
     }
 }

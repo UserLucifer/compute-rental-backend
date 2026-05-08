@@ -86,10 +86,10 @@ class RentalActivationSchedulerProcessorTest {
     }
 
     @Test
-    void autoPauseShouldPauseActivatingOrderAndCredential() {
+    void autoPauseShouldPauseRunningOrderAndCredential() {
         var now = LocalDateTime.now();
-        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.ACTIVATING, now.minusMinutes(1)));
-        when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.ACTIVATING));
+        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.RUNNING, now.minusMinutes(1)));
+        when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.ACTIVE));
         when(rentalOrderMapper.update(any(), any(Wrapper.class))).thenReturn(1);
         when(apiCredentialMapper.update(any(), any(Wrapper.class))).thenReturn(1);
 
@@ -103,7 +103,7 @@ class RentalActivationSchedulerProcessorTest {
     @Test
     void notYetAutoPauseOrderShouldNotProcess() {
         var now = LocalDateTime.now();
-        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.ACTIVATING, now.plusMinutes(1)));
+        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.RUNNING, now.plusMinutes(1)));
 
         processor.autoPause(1L, now);
 
@@ -112,7 +112,7 @@ class RentalActivationSchedulerProcessorTest {
     }
 
     @Test
-    void nonActivatingOrderShouldNotAutoPause() {
+    void nonRunningOrderShouldNotAutoPause() {
         var now = LocalDateTime.now();
         when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.PAUSED, now.minusMinutes(1)));
 
@@ -123,9 +123,9 @@ class RentalActivationSchedulerProcessorTest {
     }
 
     @Test
-    void autoPauseShouldFailWhenCredentialNotActivating() {
+    void autoPauseShouldFailWhenCredentialNotActive() {
         var now = LocalDateTime.now();
-        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.ACTIVATING, now.minusMinutes(1)));
+        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.RUNNING, now.minusMinutes(1)));
         when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.PAUSED));
 
         assertThatThrownBy(() -> processor.autoPause(1L, now))
