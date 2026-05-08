@@ -85,7 +85,7 @@ public class ProfitSettlementSchedulerProcessor {
                 WalletBusinessType.RENT_PROFIT,
                 record.getProfitNo(),
                 "RENT_PROFIT:" + order.getOrderNo() + ":" + profitDate,
-                "Daily rental profit"
+                "每日租赁收益"
         );
         profitRecordMapper.update(null, new LambdaUpdateWrapper<RentalProfitRecord>()
                 .eq(RentalProfitRecord::getId, record.getId())

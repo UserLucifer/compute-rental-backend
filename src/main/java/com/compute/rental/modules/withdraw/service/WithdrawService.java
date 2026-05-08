@@ -129,7 +129,7 @@ public class WithdrawService {
                 WalletBusinessType.WITHDRAW,
                 order.getWithdrawNo(),
                 FREEZE_ACTION,
-                "Withdraw freeze"
+                "提现冻结"
         );
         withdrawOrderMapper.update(null, new LambdaUpdateWrapper<WithdrawOrder>()
                 .eq(WithdrawOrder::getId, order.getId())
@@ -175,7 +175,7 @@ public class WithdrawService {
         }
         updateStatus(order, WithdrawOrderStatus.CANCELED, null, null, null);
         var tx = walletService.unfreeze(order.getUserId(), order.getApplyAmount(), WalletBusinessType.WITHDRAW,
-                order.getWithdrawNo(), UNFREEZE_ACTION, "Withdraw canceled");
+                order.getWithdrawNo(), UNFREEZE_ACTION, "提现取消解冻");
         updateUnfreezeTxNo(order.getId(), tx.getTxNo());
     }
 
@@ -228,7 +228,7 @@ public class WithdrawService {
         }
         updateStatus(order, WithdrawOrderStatus.REJECTED, reviewedBy, request.reviewRemark(), null);
         var tx = walletService.unfreeze(order.getUserId(), order.getApplyAmount(), WalletBusinessType.WITHDRAW,
-                order.getWithdrawNo(), UNFREEZE_ACTION, "Withdraw rejected");
+                order.getWithdrawNo(), UNFREEZE_ACTION, "提现驳回解冻");
         updateUnfreezeTxNo(order.getId(), tx.getTxNo());
         return getAdminOrder(withdrawNo);
     }
@@ -255,7 +255,7 @@ public class WithdrawService {
             throw new BusinessException(ErrorCode.WITHDRAW_ORDER_STATUS_CHANGED);
         }
         var tx = walletService.deductFrozen(order.getUserId(), order.getApplyAmount(), order.getActualAmount(),
-                WalletBusinessType.WITHDRAW, order.getWithdrawNo(), PAID_ACTION, "Withdraw paid");
+                WalletBusinessType.WITHDRAW, order.getWithdrawNo(), PAID_ACTION, "提现已打款");
         withdrawOrderMapper.update(null, new LambdaUpdateWrapper<WithdrawOrder>()
                 .eq(WithdrawOrder::getId, order.getId())
                 .set(WithdrawOrder::getPaidTxNo, tx.getTxNo())

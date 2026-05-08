@@ -60,7 +60,7 @@ public class RentalActivationSchedulerProcessor {
                 WalletBusinessType.REFUND,
                 order.getOrderNo(),
                 ACTIVATION_TIMEOUT_ACTION,
-                "Activation timeout refund"
+                "激活超时退款"
         );
         apiCredentialMapper.update(null, new LambdaUpdateWrapper<ApiCredential>()
                 .eq(ApiCredential::getRentalOrderId, order.getId())

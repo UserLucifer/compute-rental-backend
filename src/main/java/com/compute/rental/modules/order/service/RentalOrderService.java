@@ -203,7 +203,7 @@ public class RentalOrderService {
                 WalletBusinessType.RENT_PAY,
                 order.getOrderNo(),
                 PAY_ACTION,
-                "Rental machine fee paid"
+                "租赁机器费用支付"
         );
         var credential = createCredentialIfAbsent(order, now);
         rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
@@ -277,7 +277,7 @@ public class RentalOrderService {
                 WalletBusinessType.API_DEPLOY_FEE,
                 deployOrder.getDeployNo(),
                 PAY_ACTION,
-                "API deploy fee paid"
+                "API 部署费用支付"
         );
         var updatedDeploy = apiDeployOrderMapper.update(null, new LambdaUpdateWrapper<ApiDeployOrder>()
                 .eq(ApiDeployOrder::getId, deployOrder.getId())
@@ -425,7 +425,7 @@ public class RentalOrderService {
                 WalletBusinessType.REFUND,
                 order.getOrderNo(),
                 CANCEL_ACTION,
-                "Rental order canceled refund"
+                "租赁订单取消退款"
         );
         apiCredentialMapper.update(null, new LambdaUpdateWrapper<ApiCredential>()
                 .eq(ApiCredential::getRentalOrderId, order.getId())

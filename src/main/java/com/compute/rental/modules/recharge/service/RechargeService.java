@@ -364,7 +364,7 @@ public class RechargeService {
                 WalletBusinessType.RECHARGE,
                 order.getRechargeNo(),
                 APPROVE_ACTION,
-                "Recharge approved"
+                "充值审核通过"
         );
         rechargeOrderMapper.update(null, new LambdaUpdateWrapper<RechargeOrder>()
                 .eq(RechargeOrder::getId, order.getId())

@@ -9,6 +9,7 @@ import com.compute.rental.common.enums.RentalOrderStatus;
 import com.compute.rental.common.exception.BusinessException;
 import com.compute.rental.common.page.PageResult;
 import com.compute.rental.common.util.DateTimeUtils;
+import com.compute.rental.common.util.WalletRemarkUtils;
 import com.compute.rental.modules.commission.entity.CommissionRecord;
 import com.compute.rental.modules.commission.mapper.CommissionRecordMapper;
 import com.compute.rental.modules.order.entity.ApiCredential;
@@ -598,7 +599,7 @@ public class AdminBusinessQueryService {
                 transaction.getAfterFrozenBalance(),
                 transaction.getBizType(),
                 transaction.getBizOrderNo(),
-                transaction.getRemark(),
+                WalletRemarkUtils.toChinese(transaction.getRemark()),
                 transaction.getCreatedAt());
     }
 

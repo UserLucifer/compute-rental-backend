@@ -123,7 +123,7 @@ public class SettlementService {
                     WalletBusinessType.EARLY_PENALTY,
                     settlement.getSettlementNo(),
                     "EARLY_PENALTY:" + order.getOrderNo() + ":EARLY_TERMINATE",
-                    "Early settlement penalty retained from principal"
+                    "提前结算违约金从本金中扣除"
             );
         }
         var tx = walletService.creditWithIdempotencyKey(
@@ -132,7 +132,7 @@ public class SettlementService {
                 WalletBusinessType.SETTLEMENT,
                 settlement.getSettlementNo(),
                 "SETTLEMENT:" + order.getOrderNo() + ":EARLY_TERMINATE",
-                "Early settlement principal returned"
+                "提前结算本金返还"
         );
         settlementOrderMapper.update(null, new LambdaUpdateWrapper<RentalSettlementOrder>()
                 .eq(RentalSettlementOrder::getId, settlement.getId())
@@ -186,7 +186,7 @@ public class SettlementService {
                 WalletBusinessType.SETTLEMENT,
                 settlement.getSettlementNo(),
                 "SETTLEMENT:" + order.getOrderNo() + ":EXPIRE",
-                "Expired rental principal returned"
+                "租赁到期本金返还"
         );
         settlementOrderMapper.update(null, new LambdaUpdateWrapper<RentalSettlementOrder>()
                 .eq(RentalSettlementOrder::getId, settlement.getId())

@@ -11,6 +11,7 @@ import com.compute.rental.common.exception.BusinessException;
 import com.compute.rental.common.page.PageResult;
 import com.compute.rental.common.util.DateTimeUtils;
 import com.compute.rental.common.util.MoneyUtils;
+import com.compute.rental.common.util.WalletRemarkUtils;
 import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.wallet.dto.WalletMeResponse;
@@ -442,7 +443,7 @@ public class WalletService {
                 transaction.getAfterFrozenBalance(),
                 transaction.getBizType(),
                 transaction.getBizOrderNo(),
-                transaction.getRemark(),
+                WalletRemarkUtils.toChinese(transaction.getRemark()),
                 transaction.getCreatedAt()
         );
     }

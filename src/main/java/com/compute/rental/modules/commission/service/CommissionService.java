@@ -192,7 +192,7 @@ public class CommissionService {
                 WalletBusinessType.COMMISSION_PROFIT,
                 record.getCommissionNo(),
                 "COMMISSION_PROFIT:" + profit.getId() + ":" + levelNo,
-                "Commission profit"
+                "佣金收益"
         );
         commissionRecordMapper.update(null, new LambdaUpdateWrapper<CommissionRecord>()
                 .eq(CommissionRecord::getId, record.getId())
