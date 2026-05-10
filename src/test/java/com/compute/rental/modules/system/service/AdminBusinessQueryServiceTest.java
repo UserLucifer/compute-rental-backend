@@ -24,6 +24,7 @@ import com.compute.rental.modules.order.mapper.RentalOrderMapper;
 import com.compute.rental.modules.order.mapper.RentalProfitRecordMapper;
 import com.compute.rental.modules.order.mapper.RentalSettlementOrderMapper;
 import com.compute.rental.modules.order.service.RentalOrderRunSegmentService;
+import com.compute.rental.modules.system.dto.AdminTeamAggregateRow;
 import com.compute.rental.modules.system.mapper.SysAdminLogMapper;
 import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.entity.UserTeamRelation;
@@ -32,6 +33,7 @@ import com.compute.rental.modules.user.mapper.UserTeamRelationMapper;
 import com.compute.rental.modules.wallet.entity.WalletTransaction;
 import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
 import com.compute.rental.modules.wallet.mapper.WalletTransactionMapper;
+import java.math.BigDecimal;
 import java.util.List;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.session.Configuration;
@@ -209,5 +211,71 @@ class AdminBusinessQueryServiceTest {
         assertEquals(1, result.totalTeamCount());
         assertEquals(99L, result.relations().get(0).id());
         assertEquals(11L, result.relations().get(0).descendantUserId());
+    }
+
+    @Test
+    void teamListUsesSqlAggregatePagination() {
+        when(teamRelationMapper.countAdminTeamAggregates(eq(2), eq("alice"), isNull(), eq(1))).thenReturn(1L);
+        when(teamRelationMapper.selectAdminTeamAggregatePage(
+                eq(2),
+                eq("alice"),
+                isNull(),
+                eq(1),
+                any(),
+                any(),
+                eq("SETTLED"),
+                eq("RUNNING"),
+                eq("PAUSED"),
+                eq("directCount"),
+                eq(20L),
+                eq(20L))).thenReturn(List.of(teamAggregateRow(10L)));
+
+        var result = service.pageAdminTeamList(2, 20, " alice ", 1, "directCount");
+
+        assertEquals(1L, result.total());
+        assertEquals(2L, result.pageNo());
+        assertEquals(20L, result.pageSize());
+        assertEquals(10L, result.records().get(0).userId());
+    }
+
+    @Test
+    void teamLeaderboardUsesSqlAggregatePaginationAndRankOffset() {
+        when(teamRelationMapper.countAdminTeamAggregates(eq(2), isNull(), isNull(), isNull())).thenReturn(3L);
+        when(teamRelationMapper.selectAdminTeamAggregatePage(
+                eq(2),
+                isNull(),
+                isNull(),
+                isNull(),
+                any(),
+                any(),
+                eq("SETTLED"),
+                eq("RUNNING"),
+                eq("PAUSED"),
+                eq("totalCommission"),
+                eq(2L),
+                eq(2L))).thenReturn(List.of(teamAggregateRow(30L)));
+
+        var result = service.pageAdminTeamLeaderboard(2, 2, null);
+
+        assertEquals(3L, result.total());
+        assertEquals(3L, result.records().get(0).rankNo());
+        assertEquals(30L, result.records().get(0).userId());
+    }
+
+    private AdminTeamAggregateRow teamAggregateRow(Long userId) {
+        var row = new AdminTeamAggregateRow();
+        row.setUserId(userId);
+        row.setUserName("Alice");
+        row.setEmail("alice@example.com");
+        row.setAvatarKey("avatar");
+        row.setUserStatus(1);
+        row.setDirectCount(2L);
+        row.setIndirectCount(1L);
+        row.setTotalTeamCount(3L);
+        row.setYesterdayCommission(BigDecimal.ONE);
+        row.setTotalCommission(BigDecimal.TEN);
+        row.setActiveOrderCount(1L);
+        row.setRunningOrderCount(1L);
+        return row;
     }
 }

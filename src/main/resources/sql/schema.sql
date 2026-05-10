@@ -65,7 +65,9 @@ CREATE TABLE `user_team_relation` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_ancestor_descendant` (`ancestor_user_id`, `descendant_user_id`),
   KEY `idx_ancestor_depth` (`ancestor_user_id`, `level_depth`),
+  KEY `idx_level_depth_ancestor` (`level_depth`, `ancestor_user_id`),
   KEY `idx_descendant` (`descendant_user_id`),
+  KEY `idx_descendant_depth_ancestor` (`descendant_user_id`, `level_depth`, `ancestor_user_id`),
   CONSTRAINT `fk_team_ancestor` FOREIGN KEY (`ancestor_user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_team_descendant` FOREIGN KEY (`descendant_user_id`) REFERENCES `app_user` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户团队归属关系表';
@@ -402,6 +404,7 @@ CREATE TABLE `rental_order` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order_no` (`order_no`),
   KEY `idx_user_id` (`user_id`),
+  KEY `idx_user_status_id` (`user_id`, `order_status`, `id`),
   KEY `idx_product_id` (`product_id`),
   KEY `idx_ai_model_id` (`ai_model_id`),
   KEY `idx_cycle_rule_id` (`cycle_rule_id`),
@@ -600,8 +603,11 @@ CREATE TABLE `commission_record` (
   KEY `idx_status` (`status`),
   KEY `idx_status_settled_at` (`status`, `settled_at`),
   KEY `idx_status_settled_amount` (`status`, `settled_at`, `commission_amount`),
+  KEY `idx_status_created_level_amount` (`status`, `created_at`, `level_no`, `commission_amount`),
+  KEY `idx_status_level_benefit_settled` (`status`, `level_no`, `benefit_user_id`, `settled_at`, `commission_amount`),
   KEY `idx_benefit_status_settled_at` (`benefit_user_id`, `status`, `settled_at`, `commission_amount`),
   KEY `idx_benefit_status_level` (`benefit_user_id`, `status`, `level_no`, `commission_amount`),
+  KEY `idx_benefit_source_status_settled` (`benefit_user_id`, `source_user_id`, `status`, `settled_at`, `commission_amount`),
   CONSTRAINT `fk_commission_benefit_user` FOREIGN KEY (`benefit_user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_commission_source_user` FOREIGN KEY (`source_user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_commission_profit` FOREIGN KEY (`source_profit_id`) REFERENCES `rental_profit_record` (`id`)

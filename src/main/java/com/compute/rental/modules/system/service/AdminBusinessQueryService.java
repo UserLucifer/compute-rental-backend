@@ -35,6 +35,7 @@ import com.compute.rental.modules.system.dto.AdminProfitRecordResponse;
 import com.compute.rental.modules.system.dto.AdminRentalOrderDetailResponse;
 import com.compute.rental.modules.system.dto.AdminRentalOrderResponse;
 import com.compute.rental.modules.system.dto.AdminSettlementOrderResponse;
+import com.compute.rental.modules.system.dto.AdminTeamAggregateRow;
 import com.compute.rental.modules.system.dto.AdminTeamLeaderboardRow;
 import com.compute.rental.modules.system.dto.AdminTeamListRow;
 import com.compute.rental.modules.system.dto.AdminTeamMemberRow;
@@ -62,7 +63,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -540,12 +540,30 @@ public class AdminBusinessQueryService {
     ) {
         var current = normalizePageNo(pageNo);
         var size = normalizePageSize(pageSize, 100);
-        var aggregates = adminTeamAggregates(keyword, status);
-        aggregates.sort(teamListComparator(sortBy));
-        var pageRecords = slice(aggregates, current, size).stream()
+        var normalizedKeyword = AppUserSearchSupport.normalize(keyword);
+        var internalUserId = parseLong(normalizedKeyword);
+        var total = teamRelationMapper.countAdminTeamAggregates(MAX_HIERARCHY_LEVEL, normalizedKeyword,
+                internalUserId, status);
+        if (total == 0) {
+            return new PageResult<>(Collections.emptyList(), 0, current, size);
+        }
+        var rows = teamRelationMapper.selectAdminTeamAggregatePage(
+                MAX_HIERARCHY_LEVEL,
+                normalizedKeyword,
+                internalUserId,
+                status,
+                yesterdayStart(),
+                todayStart(),
+                RecordSettleStatus.SETTLED.name(),
+                RentalOrderStatus.RUNNING.name(),
+                RentalOrderStatus.PAUSED.name(),
+                teamListSortBy(sortBy),
+                size,
+                pageOffset(current, size));
+        var pageRecords = rows.stream()
                 .map(this::adminTeamListRow)
                 .toList();
-        return new PageResult<>(pageRecords, aggregates.size(), current, size);
+        return new PageResult<>(pageRecords, total, current, size);
     }
 
     public PageResult<AdminTeamLeaderboardRow> pageAdminTeamLeaderboard(
@@ -555,21 +573,44 @@ public class AdminBusinessQueryService {
     ) {
         var current = normalizePageNo(pageNo);
         var size = normalizePageSize(pageSize, 100);
-        var aggregates = adminTeamAggregates(null, null);
-        aggregates.sort(teamLeaderboardComparator(sortBy));
-        var fromIndex = pageStartIndex(aggregates.size(), current, size);
-        var toIndex = pageEndIndex(aggregates.size(), fromIndex, size);
-        var records = new ArrayList<AdminTeamLeaderboardRow>();
-        for (var index = fromIndex; index < toIndex; index++) {
-            records.add(adminTeamLeaderboardRow(aggregates.get(index), index + 1L));
+        var total = teamRelationMapper.countAdminTeamAggregates(MAX_HIERARCHY_LEVEL, null, null, null);
+        if (total == 0) {
+            return new PageResult<>(Collections.emptyList(), 0, current, size);
         }
-        return new PageResult<>(records, aggregates.size(), current, size);
+        var offset = pageOffset(current, size);
+        var rows = teamRelationMapper.selectAdminTeamAggregatePage(
+                MAX_HIERARCHY_LEVEL,
+                null,
+                null,
+                null,
+                yesterdayStart(),
+                todayStart(),
+                RecordSettleStatus.SETTLED.name(),
+                RentalOrderStatus.RUNNING.name(),
+                RentalOrderStatus.PAUSED.name(),
+                teamLeaderboardSortBy(sortBy),
+                size,
+                offset);
+        var records = new ArrayList<AdminTeamLeaderboardRow>();
+        for (var index = 0; index < rows.size(); index++) {
+            records.add(adminTeamLeaderboardRow(rows.get(index), offset + index + 1L));
+        }
+        return new PageResult<>(records, total, current, size);
     }
 
     public AdminTeamUserSummaryResponse adminTeamUserSummary(Long userId) {
         var user = requireUser(userId);
-        var aggregate = adminTeamAggregateMap(List.of(userId))
-                .getOrDefault(userId, emptyAdminTeamAggregate(user));
+        var aggregate = teamRelationMapper.selectAdminTeamAggregateByUserId(
+                userId,
+                MAX_HIERARCHY_LEVEL,
+                yesterdayStart(),
+                todayStart(),
+                RecordSettleStatus.SETTLED.name(),
+                RentalOrderStatus.RUNNING.name(),
+                RentalOrderStatus.PAUSED.name());
+        if (aggregate == null) {
+            aggregate = emptyAdminTeamAggregateRow(user);
+        }
         return adminTeamUserSummaryResponse(aggregate);
     }
 
@@ -746,104 +787,15 @@ public class AdminBusinessQueryService {
     }
 
     private long activeTeamCount() {
-        var relations = selectTwoLevelRelations();
-        if (relations.isEmpty()) {
-            return 0;
-        }
-        var descendantIds = relations.stream().map(UserTeamRelation::getDescendantUserId).toList();
-        var enabledUserIds = new HashSet<Long>();
-        for (var user : appUserMap(descendantIds).values()) {
-            if (Integer.valueOf(CommonStatus.ENABLED.value()).equals(user.getStatus())) {
-                enabledUserIds.add(user.getId());
-            }
-        }
-        var activeAncestorIds = new HashSet<Long>();
-        for (var relation : relations) {
-            if (enabledUserIds.contains(relation.getDescendantUserId())) {
-                activeAncestorIds.add(relation.getAncestorUserId());
-            }
-        }
-        return activeAncestorIds.size();
+        return teamRelationMapper.countActiveTeamAncestors(MAX_HIERARCHY_LEVEL, CommonStatus.ENABLED.value());
     }
 
     private BigDecimal estimatedCommissionAmount(LocalDateTime startAt, LocalDateTime endAt) {
-        var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
-                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
-                .ne(CommissionRecord::getStatus, RecordSettleStatus.CANCELED.name())
-                .ge(startAt != null, CommissionRecord::getCreatedAt, startAt)
-                .lt(endAt != null, CommissionRecord::getCreatedAt, endAt));
-        return sumCommissionAmount(records);
-    }
-
-    private List<AdminTeamAggregate> adminTeamAggregates(String keyword, Integer status) {
-        var candidateIds = teamAncestorIds();
-        if (candidateIds.isEmpty()) {
-            return new ArrayList<>();
-        }
-        if (hasText(keyword)) {
-            candidateIds.retainAll(userIdsByAdminKeyword(keyword));
-            if (candidateIds.isEmpty()) {
-                return new ArrayList<>();
-            }
-        }
-
-        var aggregates = new ArrayList<>(adminTeamAggregateMap(candidateIds).values());
-        if (status != null) {
-            aggregates.removeIf(aggregate -> !status.equals(aggregate.user().getStatus()));
-        }
-        return aggregates;
-    }
-
-    private Map<Long, AdminTeamAggregate> adminTeamAggregateMap(Collection<Long> userIds) {
-        var ids = distinctIds(userIds);
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        var users = appUserMap(ids);
-        var relations = selectRelationsForAncestors(ids);
-        var counts = teamCountsByAncestor(relations);
-        var orderStats = teamOrderStatsByAncestor(relations);
-        var totalCommission = settledCommissionByBenefit(ids, null, null);
-        var yesterdayCommission = settledCommissionByBenefit(ids, yesterdayStart(), todayStart());
-        var lastCommissionAt = lastCommissionAtByBenefit(ids);
-        var result = new HashMap<Long, AdminTeamAggregate>();
-        for (var id : ids) {
-            var user = users.get(id);
-            if (user == null) {
-                continue;
-            }
-            result.put(id, new AdminTeamAggregate(
-                    user,
-                    counts.getOrDefault(id, TeamCounts.ZERO),
-                    yesterdayCommission.getOrDefault(id, BigDecimal.ZERO),
-                    totalCommission.getOrDefault(id, BigDecimal.ZERO),
-                    orderStats.getOrDefault(id, TeamOrderStats.ZERO),
-                    lastCommissionAt.get(id)));
-        }
-        return result;
-    }
-
-    private AdminTeamAggregate emptyAdminTeamAggregate(AppUser user) {
-        return new AdminTeamAggregate(
-                user,
-                TeamCounts.ZERO,
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                TeamOrderStats.ZERO,
-                null);
-    }
-
-    private Set<Long> teamAncestorIds() {
-        var ancestorIds = new HashSet<Long>();
-        for (var relation : selectTwoLevelRelations()) {
-            ancestorIds.add(relation.getAncestorUserId());
-        }
-        return ancestorIds;
-    }
-
-    private List<UserTeamRelation> selectTwoLevelRelations() {
-        return teamRelationMapper.selectList(new LambdaQueryWrapper<UserTeamRelation>()
-                .le(UserTeamRelation::getLevelDepth, MAX_HIERARCHY_LEVEL));
+        return nullToZero(commissionRecordMapper.sumCommissionAmountByStatusesAndCreatedAtRange(
+                List.of(RecordSettleStatus.PENDING.name(), RecordSettleStatus.SETTLED.name()),
+                MAX_HIERARCHY_LEVEL,
+                startAt,
+                endAt));
     }
 
     private List<UserTeamRelation> selectRelationsForAncestors(Collection<Long> ancestorIds) {
@@ -880,33 +832,6 @@ public class AdminBusinessQueryService {
         return result;
     }
 
-    private Map<Long, TeamOrderStats> teamOrderStatsByAncestor(List<UserTeamRelation> relations) {
-        if (relations.isEmpty()) {
-            return Map.of();
-        }
-        var ancestorsByDescendant = new HashMap<Long, Set<Long>>();
-        for (var relation : relations) {
-            ancestorsByDescendant.computeIfAbsent(relation.getDescendantUserId(), ignored -> new HashSet<>())
-                    .add(relation.getAncestorUserId());
-        }
-        var orders = selectActiveOrders(ancestorsByDescendant.keySet());
-        var result = new HashMap<Long, TeamOrderStats>();
-        for (var order : orders) {
-            var ancestorIds = ancestorsByDescendant.get(order.getUserId());
-            if (ancestorIds == null) {
-                continue;
-            }
-            var running = RentalOrderStatus.RUNNING.name().equals(order.getOrderStatus());
-            for (var ancestorId : ancestorIds) {
-                var current = result.getOrDefault(ancestorId, TeamOrderStats.ZERO);
-                result.put(ancestorId, new TeamOrderStats(
-                        current.activeOrderCount() + 1,
-                        current.runningOrderCount() + (running ? 1 : 0)));
-            }
-        }
-        return result;
-    }
-
     private List<RentalOrder> selectActiveOrders(Collection<Long> userIds) {
         var ids = distinctIds(userIds);
         if (ids.isEmpty()) {
@@ -934,28 +859,6 @@ public class AdminBusinessQueryService {
         return result;
     }
 
-    private Map<Long, BigDecimal> settledCommissionByBenefit(
-            Collection<Long> benefitUserIds,
-            LocalDateTime startAt,
-            LocalDateTime endAt
-    ) {
-        var ids = distinctIds(benefitUserIds);
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
-                .in(CommissionRecord::getBenefitUserId, ids)
-                .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name())
-                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
-                .ge(startAt != null, CommissionRecord::getSettledAt, startAt)
-                .lt(endAt != null, CommissionRecord::getSettledAt, endAt));
-        var result = new HashMap<Long, BigDecimal>();
-        for (var record : records) {
-            result.merge(record.getBenefitUserId(), nullToZero(record.getCommissionAmount()), BigDecimal::add);
-        }
-        return result;
-    }
-
     private Map<Long, BigDecimal> settledContributionBySource(
             Long benefitUserId,
             Collection<Long> sourceUserIds,
@@ -966,34 +869,16 @@ public class AdminBusinessQueryService {
         if (ids.isEmpty()) {
             return Map.of();
         }
-        var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
-                .eq(CommissionRecord::getBenefitUserId, benefitUserId)
-                .in(CommissionRecord::getSourceUserId, ids)
-                .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name())
-                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
-                .ge(startAt != null, CommissionRecord::getSettledAt, startAt)
-                .lt(endAt != null, CommissionRecord::getSettledAt, endAt));
         var result = new HashMap<Long, BigDecimal>();
-        for (var record : records) {
-            result.merge(record.getSourceUserId(), nullToZero(record.getCommissionAmount()), BigDecimal::add);
-        }
-        return result;
-    }
-
-    private Map<Long, LocalDateTime> lastCommissionAtByBenefit(Collection<Long> benefitUserIds) {
-        var ids = distinctIds(benefitUserIds);
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
-                .in(CommissionRecord::getBenefitUserId, ids)
-                .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name())
-                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
-                .isNotNull(CommissionRecord::getSettledAt));
-        var result = new HashMap<Long, LocalDateTime>();
-        for (var record : records) {
-            result.merge(record.getBenefitUserId(), record.getSettledAt(),
-                    (first, second) -> first.isAfter(second) ? first : second);
+        var rows = commissionRecordMapper.sumSettledContributionBySource(
+                benefitUserId,
+                ids,
+                RecordSettleStatus.SETTLED.name(),
+                MAX_HIERARCHY_LEVEL,
+                startAt,
+                endAt);
+        for (var row : rows) {
+            result.put(row.getSourceUserId(), nullToZero(row.getAmount()));
         }
         return result;
     }
@@ -1056,41 +941,6 @@ public class AdminBusinessQueryService {
         }
     }
 
-    private Comparator<AdminTeamAggregate> teamListComparator(String sortBy) {
-        return switch (sortBy == null ? "" : sortBy) {
-            case "totalCommission" -> teamCommissionComparator(AdminTeamAggregate::totalCommission);
-            case "yesterdayCommission" -> teamCommissionComparator(AdminTeamAggregate::yesterdayCommission);
-            case "directCount" -> Comparator.comparingLong(
-                    (AdminTeamAggregate aggregate) -> aggregate.counts().directCount()).reversed()
-                    .thenComparing(teamUserIdDescComparator());
-            default -> Comparator.comparing(
-                            AdminTeamAggregate::lastCommissionAt,
-                            Comparator.nullsFirst(Comparator.naturalOrder()))
-                    .reversed()
-                    .thenComparing(teamUserIdDescComparator());
-        };
-    }
-
-    private Comparator<AdminTeamAggregate> teamLeaderboardComparator(String sortBy) {
-        return switch (sortBy == null ? "" : sortBy) {
-            case "yesterdayCommission" -> teamCommissionComparator(AdminTeamAggregate::yesterdayCommission);
-            case "directCount" -> Comparator.comparingLong(
-                    (AdminTeamAggregate aggregate) -> aggregate.counts().directCount()).reversed()
-                    .thenComparing(teamUserIdDescComparator());
-            default -> teamCommissionComparator(AdminTeamAggregate::totalCommission);
-        };
-    }
-
-    private Comparator<AdminTeamAggregate> teamCommissionComparator(
-            java.util.function.Function<AdminTeamAggregate, BigDecimal> amountExtractor
-    ) {
-        return Comparator.comparing(amountExtractor).reversed().thenComparing(teamUserIdDescComparator());
-    }
-
-    private Comparator<AdminTeamAggregate> teamUserIdDescComparator() {
-        return Comparator.comparing(AdminTeamAggregate::userId).reversed();
-    }
-
     private LocalDateTime yesterdayStart() {
         return DateTimeUtils.today().minusDays(1).atStartOfDay();
     }
@@ -1107,19 +957,22 @@ public class AdminBusinessQueryService {
         return Math.min(Math.max(1, pageSize), maxPageSize);
     }
 
-    private int pageStartIndex(int total, long pageNo, long pageSize) {
-        var start = (pageNo - 1) * pageSize;
-        return (int) Math.min(start, total);
+    private long pageOffset(long pageNo, long pageSize) {
+        return (pageNo - 1) * pageSize;
     }
 
-    private int pageEndIndex(int total, int fromIndex, long pageSize) {
-        return (int) Math.min(fromIndex + pageSize, total);
+    private String teamListSortBy(String sortBy) {
+        return switch (sortBy == null ? "" : sortBy) {
+            case "totalCommission", "yesterdayCommission", "directCount" -> sortBy;
+            default -> "lastCommissionAt";
+        };
     }
 
-    private <T> List<T> slice(List<T> records, long pageNo, long pageSize) {
-        var fromIndex = pageStartIndex(records.size(), pageNo, pageSize);
-        var toIndex = pageEndIndex(records.size(), fromIndex, pageSize);
-        return records.subList(fromIndex, toIndex);
+    private String teamLeaderboardSortBy(String sortBy) {
+        return switch (sortBy == null ? "" : sortBy) {
+            case "yesterdayCommission", "directCount" -> sortBy;
+            default -> "totalCommission";
+        };
     }
 
     private Set<Long> distinctIds(Collection<Long> ids) {
@@ -1135,16 +988,29 @@ public class AdminBusinessQueryService {
         return result;
     }
 
-    private BigDecimal sumCommissionAmount(List<CommissionRecord> records) {
-        var result = BigDecimal.ZERO;
-        for (var record : records) {
-            result = result.add(nullToZero(record.getCommissionAmount()));
-        }
-        return result;
-    }
-
     private BigDecimal nullToZero(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private long nullToZero(Long value) {
+        return value == null ? 0 : value;
+    }
+
+    private AdminTeamAggregateRow emptyAdminTeamAggregateRow(AppUser user) {
+        var row = new AdminTeamAggregateRow();
+        row.setUserId(user.getId());
+        row.setUserName(user.getUserName());
+        row.setEmail(user.getEmail());
+        row.setAvatarKey(user.getAvatarKey());
+        row.setUserStatus(user.getStatus());
+        row.setDirectCount(0L);
+        row.setIndirectCount(0L);
+        row.setTotalTeamCount(0L);
+        row.setYesterdayCommission(BigDecimal.ZERO);
+        row.setTotalCommission(BigDecimal.ZERO);
+        row.setActiveOrderCount(0L);
+        row.setRunningOrderCount(0L);
+        return row;
     }
 
     private Long resolveOrderId(String orderNo) {
@@ -1157,61 +1023,53 @@ public class AdminBusinessQueryService {
         return order == null ? null : order.getId();
     }
 
-    private AdminTeamListRow adminTeamListRow(AdminTeamAggregate aggregate) {
-        var user = aggregate.user();
-        var counts = aggregate.counts();
-        var orderStats = aggregate.orderStats();
+    private AdminTeamListRow adminTeamListRow(AdminTeamAggregateRow aggregate) {
         return new AdminTeamListRow(
-                user.getId(),
-                user.getUserName(),
-                user.getEmail(),
-                user.getAvatarKey(),
-                user.getStatus(),
-                counts.directCount(),
-                counts.indirectCount(),
-                counts.totalCount(),
-                aggregate.yesterdayCommission(),
-                aggregate.totalCommission(),
-                orderStats.activeOrderCount(),
-                orderStats.runningOrderCount(),
-                aggregate.lastCommissionAt(),
+                aggregate.getUserId(),
+                aggregate.getUserName(),
+                aggregate.getEmail(),
+                aggregate.getAvatarKey(),
+                aggregate.getUserStatus(),
+                nullToZero(aggregate.getDirectCount()),
+                nullToZero(aggregate.getIndirectCount()),
+                nullToZero(aggregate.getTotalTeamCount()),
+                nullToZero(aggregate.getYesterdayCommission()),
+                nullToZero(aggregate.getTotalCommission()),
+                nullToZero(aggregate.getActiveOrderCount()),
+                nullToZero(aggregate.getRunningOrderCount()),
+                aggregate.getLastCommissionAt(),
                 CURRENCY_USDT);
     }
 
-    private AdminTeamLeaderboardRow adminTeamLeaderboardRow(AdminTeamAggregate aggregate, long rankNo) {
-        var user = aggregate.user();
-        var counts = aggregate.counts();
+    private AdminTeamLeaderboardRow adminTeamLeaderboardRow(AdminTeamAggregateRow aggregate, long rankNo) {
         return new AdminTeamLeaderboardRow(
                 rankNo,
-                user.getId(),
-                user.getUserName(),
-                user.getAvatarKey(),
-                user.getStatus(),
-                counts.directCount(),
-                counts.indirectCount(),
-                aggregate.yesterdayCommission(),
-                aggregate.totalCommission(),
-                aggregate.orderStats().activeOrderCount(),
+                aggregate.getUserId(),
+                aggregate.getUserName(),
+                aggregate.getAvatarKey(),
+                aggregate.getUserStatus(),
+                nullToZero(aggregate.getDirectCount()),
+                nullToZero(aggregate.getIndirectCount()),
+                nullToZero(aggregate.getYesterdayCommission()),
+                nullToZero(aggregate.getTotalCommission()),
+                nullToZero(aggregate.getActiveOrderCount()),
                 CURRENCY_USDT);
     }
 
-    private AdminTeamUserSummaryResponse adminTeamUserSummaryResponse(AdminTeamAggregate aggregate) {
-        var user = aggregate.user();
-        var counts = aggregate.counts();
-        var orderStats = aggregate.orderStats();
+    private AdminTeamUserSummaryResponse adminTeamUserSummaryResponse(AdminTeamAggregateRow aggregate) {
         return new AdminTeamUserSummaryResponse(
-                user.getId(),
-                user.getUserName(),
-                user.getEmail(),
-                user.getAvatarKey(),
-                user.getStatus(),
-                counts.directCount(),
-                counts.indirectCount(),
-                counts.totalCount(),
-                aggregate.yesterdayCommission(),
-                aggregate.totalCommission(),
-                orderStats.activeOrderCount(),
-                orderStats.runningOrderCount(),
+                aggregate.getUserId(),
+                aggregate.getUserName(),
+                aggregate.getEmail(),
+                aggregate.getAvatarKey(),
+                aggregate.getUserStatus(),
+                nullToZero(aggregate.getDirectCount()),
+                nullToZero(aggregate.getIndirectCount()),
+                nullToZero(aggregate.getTotalTeamCount()),
+                nullToZero(aggregate.getYesterdayCommission()),
+                nullToZero(aggregate.getTotalCommission()),
+                nullToZero(aggregate.getActiveOrderCount()),
+                nullToZero(aggregate.getRunningOrderCount()),
                 CURRENCY_USDT);
     }
 
@@ -1636,29 +1494,12 @@ public class AdminBusinessQueryService {
         return StringUtils.hasText(value);
     }
 
-    private record AdminTeamAggregate(
-            AppUser user,
-            TeamCounts counts,
-            BigDecimal yesterdayCommission,
-            BigDecimal totalCommission,
-            TeamOrderStats orderStats,
-            LocalDateTime lastCommissionAt
-    ) {
-        private Long userId() {
-            return user.getId();
-        }
-    }
-
     private record TeamCounts(long directCount, long indirectCount) {
         private static final TeamCounts ZERO = new TeamCounts(0, 0);
 
         private long totalCount() {
             return directCount + indirectCount;
         }
-    }
-
-    private record TeamOrderStats(long activeOrderCount, long runningOrderCount) {
-        private static final TeamOrderStats ZERO = new TeamOrderStats(0, 0);
     }
 
     private record TeamOrderBrief(String orderStatus, String latestOrderNo) {

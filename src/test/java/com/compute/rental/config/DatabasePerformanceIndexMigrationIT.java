@@ -79,7 +79,31 @@ class DatabasePerformanceIndexMigrationIT {
             new IndexMigration(
                     "commission_record",
                     "idx_benefit_status_level",
-                    "ALTER TABLE `commission_record` ADD INDEX `idx_benefit_status_level` (`benefit_user_id`, `status`, `level_no`, `commission_amount`)")
+                    "ALTER TABLE `commission_record` ADD INDEX `idx_benefit_status_level` (`benefit_user_id`, `status`, `level_no`, `commission_amount`)"),
+            new IndexMigration(
+                    "user_team_relation",
+                    "idx_level_depth_ancestor",
+                    "ALTER TABLE `user_team_relation` ADD INDEX `idx_level_depth_ancestor` (`level_depth`, `ancestor_user_id`)"),
+            new IndexMigration(
+                    "user_team_relation",
+                    "idx_descendant_depth_ancestor",
+                    "ALTER TABLE `user_team_relation` ADD INDEX `idx_descendant_depth_ancestor` (`descendant_user_id`, `level_depth`, `ancestor_user_id`)"),
+            new IndexMigration(
+                    "rental_order",
+                    "idx_user_status_id",
+                    "ALTER TABLE `rental_order` ADD INDEX `idx_user_status_id` (`user_id`, `order_status`, `id`)"),
+            new IndexMigration(
+                    "commission_record",
+                    "idx_status_created_level_amount",
+                    "ALTER TABLE `commission_record` ADD INDEX `idx_status_created_level_amount` (`status`, `created_at`, `level_no`, `commission_amount`)"),
+            new IndexMigration(
+                    "commission_record",
+                    "idx_status_level_benefit_settled",
+                    "ALTER TABLE `commission_record` ADD INDEX `idx_status_level_benefit_settled` (`status`, `level_no`, `benefit_user_id`, `settled_at`, `commission_amount`)"),
+            new IndexMigration(
+                    "commission_record",
+                    "idx_benefit_source_status_settled",
+                    "ALTER TABLE `commission_record` ADD INDEX `idx_benefit_source_status_settled` (`benefit_user_id`, `source_user_id`, `status`, `settled_at`, `commission_amount`)")
     );
 
     @Test
