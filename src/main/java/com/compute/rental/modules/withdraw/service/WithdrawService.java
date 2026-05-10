@@ -31,6 +31,7 @@ import com.compute.rental.modules.withdraw.dto.WithdrawOrderQueryRequest;
 import com.compute.rental.modules.withdraw.dto.WithdrawOrderResponse;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -149,9 +150,9 @@ public class WithdrawService {
                 .le(request.endTime() != null, WithdrawOrder::getCreatedAt, request.endTime())
                 .orderByDesc(WithdrawOrder::getId);
         var result = withdrawOrderMapper.selectPage(page, wrapper);
-        var userNames = userNameMap(result.getRecords().stream().map(WithdrawOrder::getUserId).toList());
+        var userIdentities = userIdentityMap(result.getRecords().stream().map(WithdrawOrder::getUserId).toList());
         return new PageResult<>(result.getRecords().stream()
-                .map(order -> toResponse(order, userNames.get(order.getUserId())))
+                .map(order -> toResponse(order, userIdentities.get(order.getUserId())))
                 .toList(),
                 result.getTotal(), result.getCurrent(), result.getSize());
     }
@@ -180,17 +181,22 @@ public class WithdrawService {
     }
 
     public PageResult<WithdrawOrderResponse> pageAdminOrders(WithdrawOrderQueryRequest request) {
+        var keywordUserIds = userIdsByKeyword(request.keyword());
+        if (StringUtils.hasText(request.keyword()) && keywordUserIds.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0, request.current(), request.size());
+        }
         var page = new Page<WithdrawOrder>(request.current(), request.size());
         var wrapper = baseOrderQuery()
+                .in(!keywordUserIds.isEmpty(), WithdrawOrder::getUserId, keywordUserIds)
                 .eq(request.status() != null, WithdrawOrder::getStatus,
                         request.status() == null ? null : request.status().name())
                 .ge(request.startTime() != null, WithdrawOrder::getCreatedAt, request.startTime())
                 .le(request.endTime() != null, WithdrawOrder::getCreatedAt, request.endTime())
                 .orderByDesc(WithdrawOrder::getId);
         var result = withdrawOrderMapper.selectPage(page, wrapper);
-        var userNames = userNameMap(result.getRecords().stream().map(WithdrawOrder::getUserId).toList());
+        var userIdentities = userIdentityMap(result.getRecords().stream().map(WithdrawOrder::getUserId).toList());
         return new PageResult<>(result.getRecords().stream()
-                .map(order -> toResponse(order, userNames.get(order.getUserId())))
+                .map(order -> toResponse(order, userIdentities.get(order.getUserId())))
                 .toList(),
                 result.getTotal(), result.getCurrent(), result.getSize());
     }
@@ -389,13 +395,14 @@ public class WithdrawService {
     }
 
     private WithdrawOrderResponse toResponse(WithdrawOrder order) {
-        return toResponse(order, userName(order.getUserId()));
+        return toResponse(order, userIdentity(order.getUserId()));
     }
 
-    private WithdrawOrderResponse toResponse(WithdrawOrder order, String userName) {
+    private WithdrawOrderResponse toResponse(WithdrawOrder order, UserIdentity userIdentity) {
         return new WithdrawOrderResponse(
                 order.getWithdrawNo(),
-                userName,
+                userIdentity == null ? null : userIdentity.userName(),
+                userIdentity == null ? null : userIdentity.email(),
                 order.getCurrency(),
                 order.getWithdrawMethod(),
                 order.getNetwork(),
@@ -421,25 +428,44 @@ public class WithdrawService {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
-    private String userName(Long userId) {
+    private UserIdentity userIdentity(Long userId) {
         var user = userId == null ? null : appUserMapper.selectById(userId);
-        return user == null ? null : user.getUserName();
+        return user == null ? null : new UserIdentity(user.getUserName(), user.getEmail());
     }
 
-    private Map<Long, String> userNameMap(List<Long> userIds) {
+    private Map<Long, UserIdentity> userIdentityMap(List<Long> userIds) {
         var ids = userIds.stream().filter(id -> id != null).distinct().toList();
         if (ids.isEmpty()) {
             return Map.of();
         }
-        var userNames = new HashMap<Long, String>();
+        var userIdentities = new HashMap<Long, UserIdentity>();
         for (var user : appUserMapper.selectBatchIds(ids)) {
-            userNames.put(user.getId(), user.getUserName());
+            userIdentities.put(user.getId(), new UserIdentity(user.getUserName(), user.getEmail()));
         }
-        return userNames;
+        return userIdentities;
+    }
+
+    private List<Long> userIdsByKeyword(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return Collections.emptyList();
+        }
+        var normalizedKeyword = keyword.trim();
+        return appUserMapper.selectList(new LambdaQueryWrapper<AppUser>()
+                        .select(AppUser::getId)
+                        .and(wrapper -> wrapper
+                                .like(AppUser::getUserName, normalizedKeyword)
+                                .or()
+                                .like(AppUser::getEmail, normalizedKeyword)))
+                .stream()
+                .map(AppUser::getId)
+                .toList();
     }
 
     private String generateWithdrawNo() {
         return "WD" + DateTimeUtils.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
+    }
+
+    private record UserIdentity(String userName, String email) {
     }
 }

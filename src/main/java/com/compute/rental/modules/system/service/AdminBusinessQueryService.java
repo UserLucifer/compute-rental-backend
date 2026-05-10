@@ -5,7 +5,9 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.compute.rental.common.enums.ApiTokenStatus;
 import com.compute.rental.common.enums.ErrorCode;
+import com.compute.rental.common.enums.ProfitStatus;
 import com.compute.rental.common.enums.RentalOrderStatus;
+import com.compute.rental.common.enums.RunSegmentCloseReason;
 import com.compute.rental.common.exception.BusinessException;
 import com.compute.rental.common.page.PageResult;
 import com.compute.rental.common.util.DateTimeUtils;
@@ -22,6 +24,7 @@ import com.compute.rental.modules.order.mapper.ApiDeployOrderMapper;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
 import com.compute.rental.modules.order.mapper.RentalProfitRecordMapper;
 import com.compute.rental.modules.order.mapper.RentalSettlementOrderMapper;
+import com.compute.rental.modules.order.service.RentalOrderRunSegmentService;
 import com.compute.rental.modules.system.dto.AdminApiCredentialResponse;
 import com.compute.rental.modules.system.dto.AdminApiDeployOrderResponse;
 import com.compute.rental.modules.system.dto.AdminCommissionRecordResponse;
@@ -58,6 +61,8 @@ import org.springframework.util.StringUtils;
 @Service
 public class AdminBusinessQueryService {
 
+    private static final int MAX_HIERARCHY_LEVEL = 2;
+
     private final AppUserMapper appUserMapper;
     private final UserWalletMapper userWalletMapper;
     private final WalletTransactionMapper walletTransactionMapper;
@@ -70,6 +75,7 @@ public class AdminBusinessQueryService {
     private final UserTeamRelationMapper teamRelationMapper;
     private final SysAdminLogMapper adminLogMapper;
     private final AdminLogService adminLogService;
+    private final RentalOrderRunSegmentService runSegmentService;
 
     public AdminBusinessQueryService(
             AppUserMapper appUserMapper,
@@ -83,7 +89,8 @@ public class AdminBusinessQueryService {
             CommissionRecordMapper commissionRecordMapper,
             UserTeamRelationMapper teamRelationMapper,
             SysAdminLogMapper adminLogMapper,
-            AdminLogService adminLogService
+            AdminLogService adminLogService,
+            RentalOrderRunSegmentService runSegmentService
     ) {
         this.appUserMapper = appUserMapper;
         this.userWalletMapper = userWalletMapper;
@@ -97,11 +104,13 @@ public class AdminBusinessQueryService {
         this.teamRelationMapper = teamRelationMapper;
         this.adminLogMapper = adminLogMapper;
         this.adminLogService = adminLogService;
+        this.runSegmentService = runSegmentService;
     }
 
     public PageResult<AdminUserResponse> pageUsers(
             long pageNo,
             long pageSize,
+            String keyword,
             String email,
             String userId,
             Integer status,
@@ -110,6 +119,10 @@ public class AdminBusinessQueryService {
     ) {
         var page = new Page<AppUser>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<AppUser>()
+                .and(hasText(keyword), userWrapper -> userWrapper
+                        .like(AppUser::getEmail, keyword)
+                        .or()
+                        .like(AppUser::getUserName, keyword))
                 .eq(hasText(userId), AppUser::getUserId, userId)
                 .like(hasText(email), AppUser::getEmail, email)
                 .eq(status != null, AppUser::getStatus, status)
@@ -137,12 +150,16 @@ public class AdminBusinessQueryService {
                 .eq(RentalOrder::getUserId, id)
                 .eq(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name()));
         for (var order : runningOrders) {
-            rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
+            var updatedOrder = rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
                     .eq(RentalOrder::getId, order.getId())
                     .eq(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name())
                     .set(RentalOrder::getOrderStatus, RentalOrderStatus.PAUSED.name())
+                    .set(RentalOrder::getProfitStatus, ProfitStatus.PAUSED.name())
                     .set(RentalOrder::getPausedAt, now)
                     .set(RentalOrder::getUpdatedAt, now));
+            if (updatedOrder > 0) {
+                runSegmentService.closeOpenSegment(order.getId(), now, RunSegmentCloseReason.ADMIN_DISABLE);
+            }
             apiCredentialMapper.update(null, new LambdaUpdateWrapper<ApiCredential>()
                     .eq(ApiCredential::getRentalOrderId, order.getId())
                     .set(ApiCredential::getTokenStatus, ApiTokenStatus.PAUSED.name())
@@ -157,25 +174,30 @@ public class AdminBusinessQueryService {
     @Transactional
     public AdminUserResponse enableUser(Long id, Long adminId, String ip) {
         requireUser(id);
-        appUserMapper.update(null, new LambdaUpdateWrapper<AppUser>()
-                .eq(AppUser::getId, id)
-                .set(AppUser::getStatus, 1)
-                .set(AppUser::getUpdatedAt, DateTimeUtils.now()));
-        adminLogService.log(adminId, "ENABLE_USER", "app_user", id, null, "status=1",
-                "User enabled without auto-resuming orders", ip);
-        return getUser(id);
+        throw new BusinessException(ErrorCode.USER_REENABLE_NOT_ALLOWED);
     }
 
-    public PageResult<AdminWalletResponse> pageWallets(long pageNo, long pageSize, Long userId, String walletNo) {
+    public PageResult<AdminWalletResponse> pageWallets(
+            long pageNo,
+            long pageSize,
+            String keyword,
+            Long userId,
+            String walletNo
+    ) {
+        var keywordUserIds = userIdsByKeyword(keyword);
+        if (hasText(keyword) && keywordUserIds.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0, pageNo, pageSize);
+        }
         var page = new Page<UserWallet>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<UserWallet>()
                 .eq(userId != null, UserWallet::getUserId, userId)
+                .in(!keywordUserIds.isEmpty(), UserWallet::getUserId, keywordUserIds)
                 .eq(hasText(walletNo), UserWallet::getWalletNo, walletNo)
                 .orderByDesc(UserWallet::getId);
         var result = userWalletMapper.selectPage(page, wrapper);
-        var userNames = userNameMap(result.getRecords().stream().map(UserWallet::getUserId).toList());
+        var users = userBriefMap(result.getRecords().stream().map(UserWallet::getUserId).toList());
         return new PageResult<>(result.getRecords().stream()
-                .map(wallet -> walletResponse(wallet, userNames.get(wallet.getUserId())))
+                .map(wallet -> walletResponse(wallet, users.get(wallet.getUserId())))
                 .toList(), result.getTotal(), result.getCurrent(), result.getSize());
     }
 
@@ -186,12 +208,14 @@ public class AdminBusinessQueryService {
         if (wallet == null) {
             throw new BusinessException(ErrorCode.WALLET_NOT_FOUND);
         }
-        return walletResponse(wallet, userName(wallet.getUserId()));
+        var user = wallet.getUserId() == null ? null : appUserMapper.selectById(wallet.getUserId());
+        return walletResponse(wallet, user == null ? null : new UserBrief(user.getUserName(), user.getEmail()));
     }
 
     public PageResult<AdminWalletTransactionResponse> pageWalletTransactions(
             long pageNo,
             long pageSize,
+            String keyword,
             Long userId,
             String walletNo,
             String txType,
@@ -199,6 +223,10 @@ public class AdminBusinessQueryService {
             LocalDateTime startTime,
             LocalDateTime endTime
     ) {
+        var keywordUserIds = userIdsByKeyword(keyword);
+        if (hasText(keyword) && keywordUserIds.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0, pageNo, pageSize);
+        }
         Long walletId = null;
         if (hasText(walletNo)) {
             var wallet = userWalletMapper.selectOne(new LambdaQueryWrapper<UserWallet>()
@@ -212,6 +240,7 @@ public class AdminBusinessQueryService {
         var page = new Page<WalletTransaction>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<WalletTransaction>()
                 .eq(userId != null, WalletTransaction::getUserId, userId)
+                .in(!keywordUserIds.isEmpty(), WalletTransaction::getUserId, keywordUserIds)
                 .eq(walletId != null, WalletTransaction::getWalletId, walletId)
                 .eq(hasText(txType), WalletTransaction::getTxType, txType)
                 .eq(hasText(bizType), WalletTransaction::getBizType, bizType)
@@ -340,6 +369,7 @@ public class AdminBusinessQueryService {
     public PageResult<AdminProfitRecordResponse> pageProfitRecords(
             long pageNo,
             long pageSize,
+            String keyword,
             Long userId,
             String orderNo,
             String status,
@@ -351,9 +381,14 @@ public class AdminBusinessQueryService {
         if (hasText(orderNo) && orderId == null) {
             return new PageResult<>(Collections.emptyList(), 0, pageNo, pageSize);
         }
+        var keywordUserIds = userIdsByKeyword(keyword);
+        if (hasText(keyword) && keywordUserIds.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0, pageNo, pageSize);
+        }
         var page = new Page<RentalProfitRecord>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<RentalProfitRecord>()
                 .eq(userId != null, RentalProfitRecord::getUserId, userId)
+                .in(!keywordUserIds.isEmpty(), RentalProfitRecord::getUserId, keywordUserIds)
                 .eq(orderId != null, RentalProfitRecord::getRentalOrderId, orderId)
                 .eq(hasText(status), RentalProfitRecord::getStatus, status)
                 .eq(profitDate != null, RentalProfitRecord::getProfitDate, profitDate)
@@ -427,6 +462,9 @@ public class AdminBusinessQueryService {
             LocalDateTime startTime,
             LocalDateTime endTime
     ) {
+        if (unsupportedLevel(levelNo)) {
+            return new PageResult<>(Collections.emptyList(), 0, pageNo, pageSize);
+        }
         var orderId = resolveOrderId(orderNo);
         if (hasText(orderNo) && orderId == null) {
             return new PageResult<>(Collections.emptyList(), 0, pageNo, pageSize);
@@ -435,6 +473,7 @@ public class AdminBusinessQueryService {
         var wrapper = new LambdaQueryWrapper<CommissionRecord>()
                 .eq(userId != null, CommissionRecord::getBenefitUserId, userId)
                 .eq(orderId != null, CommissionRecord::getSourceOrderId, orderId)
+                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
                 .eq(levelNo != null, CommissionRecord::getLevelNo, levelNo)
                 .eq(hasText(status), CommissionRecord::getStatus, status)
                 .ge(startTime != null, CommissionRecord::getCreatedAt, startTime)
@@ -450,6 +489,7 @@ public class AdminBusinessQueryService {
     public AdminCommissionRecordResponse getCommissionRecord(String commissionNo) {
         var record = commissionRecordMapper.selectOne(new LambdaQueryWrapper<CommissionRecord>()
                 .eq(CommissionRecord::getCommissionNo, commissionNo)
+                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
                 .last("LIMIT 1"));
         if (record == null) {
             throw new BusinessException(ErrorCode.COMMISSION_RECORD_NOT_FOUND);
@@ -464,10 +504,14 @@ public class AdminBusinessQueryService {
             Long descendantUserId,
             Integer levelDepth
     ) {
+        if (unsupportedLevel(levelDepth)) {
+            return new PageResult<>(Collections.emptyList(), 0, pageNo, pageSize);
+        }
         var page = new Page<UserTeamRelation>(pageNo, pageSize);
         var wrapper = new LambdaQueryWrapper<UserTeamRelation>()
                 .eq(ancestorUserId != null, UserTeamRelation::getAncestorUserId, ancestorUserId)
                 .eq(descendantUserId != null, UserTeamRelation::getDescendantUserId, descendantUserId)
+                .le(UserTeamRelation::getLevelDepth, MAX_HIERARCHY_LEVEL)
                 .eq(levelDepth != null, UserTeamRelation::getLevelDepth, levelDepth)
                 .orderByAsc(UserTeamRelation::getLevelDepth)
                 .orderByDesc(UserTeamRelation::getId);
@@ -480,16 +524,13 @@ public class AdminBusinessQueryService {
         requireUser(userId);
         var relations = teamRelationMapper.selectList(new LambdaQueryWrapper<UserTeamRelation>()
                 .eq(UserTeamRelation::getAncestorUserId, userId)
+                .le(UserTeamRelation::getLevelDepth, MAX_HIERARCHY_LEVEL)
                 .orderByAsc(UserTeamRelation::getLevelDepth));
         return new AdminUserTeamResponse(
                 userId,
                 relations.size(),
                 countDepth(relations, 1),
                 countDepth(relations, 2),
-                countDepth(relations, 3),
-                relations.stream()
-                        .filter(relation -> relation.getLevelDepth() != null && relation.getLevelDepth() > 3)
-                        .count(),
                 relations.stream().map(this::teamRelationResponse).toList());
     }
 
@@ -563,12 +604,13 @@ public class AdminBusinessQueryService {
                 user.getUpdatedAt());
     }
 
-    private AdminWalletResponse walletResponse(UserWallet wallet, String userName) {
+    private AdminWalletResponse walletResponse(UserWallet wallet, UserBrief user) {
         return new AdminWalletResponse(
                 wallet.getId(),
                 wallet.getWalletNo(),
                 wallet.getUserId(),
-                userName,
+                user == null ? null : user.userName(),
+                user == null ? null : user.email(),
                 wallet.getCurrency(),
                 wallet.getAvailableBalance(),
                 wallet.getFrozenBalance(),
@@ -772,6 +814,9 @@ public class AdminBusinessQueryService {
                 userName,
                 record.getRentalOrderId(),
                 record.getProfitDate(),
+                record.getEffectiveMinutes(),
+                record.getPeriodStartAt(),
+                record.getPeriodEndAt(),
                 record.getGpuDailyTokenSnapshot(),
                 record.getTokenPriceSnapshot(),
                 record.getYieldMultiplierSnapshot(),
@@ -874,6 +919,33 @@ public class AdminBusinessQueryService {
         return userNames;
     }
 
+    private Map<Long, UserBrief> userBriefMap(List<Long> userIds) {
+        var ids = userIds.stream().filter(id -> id != null).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        var users = new HashMap<Long, UserBrief>();
+        for (var user : appUserMapper.selectBatchIds(ids)) {
+            users.put(user.getId(), new UserBrief(user.getUserName(), user.getEmail()));
+        }
+        return users;
+    }
+
+    private List<Long> userIdsByKeyword(String keyword) {
+        if (!hasText(keyword)) {
+            return Collections.emptyList();
+        }
+        return appUserMapper.selectList(new LambdaQueryWrapper<AppUser>()
+                        .select(AppUser::getId)
+                        .and(wrapper -> wrapper
+                                .like(AppUser::getUserName, keyword)
+                                .or()
+                                .like(AppUser::getEmail, keyword)))
+                .stream()
+                .map(AppUser::getId)
+                .toList();
+    }
+
     private long countDepth(Iterable<UserTeamRelation> relations, int depth) {
         long count = 0;
         for (var relation : relations) {
@@ -884,7 +956,14 @@ public class AdminBusinessQueryService {
         return count;
     }
 
+    private boolean unsupportedLevel(Integer level) {
+        return level != null && (level < 1 || level > MAX_HIERARCHY_LEVEL);
+    }
+
     private boolean hasText(String value) {
         return StringUtils.hasText(value);
+    }
+
+    private record UserBrief(String userName, String email) {
     }
 }

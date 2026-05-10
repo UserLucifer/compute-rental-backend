@@ -25,9 +25,7 @@ import com.compute.rental.modules.user.entity.UserReferralRelation;
 import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.user.mapper.UserReferralRelationMapper;
-import com.compute.rental.modules.wallet.entity.UserWallet;
 import com.compute.rental.modules.wallet.service.WalletService;
-import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -46,10 +44,10 @@ import org.springframework.util.StringUtils;
 public class CommissionService {
 
     private static final String CURRENCY_USDT = "USDT";
+    private static final int MAX_COMMISSION_LEVEL = 2;
     private static final Map<Integer, BigDecimal> DEFAULT_RATES = Map.of(
             1, new BigDecimal("0.2000"),
-            2, new BigDecimal("0.1000"),
-            3, new BigDecimal("0.0500")
+            2, new BigDecimal("0.1000")
     );
 
     private final CommissionRuleMapper commissionRuleMapper;
@@ -57,7 +55,6 @@ public class CommissionService {
     private final RentalProfitRecordMapper profitRecordMapper;
     private final UserReferralRelationMapper referralRelationMapper;
     private final AppUserMapper appUserMapper;
-    private final UserWalletMapper userWalletMapper;
     private final WalletService walletService;
 
     public CommissionService(
@@ -66,7 +63,6 @@ public class CommissionService {
             RentalProfitRecordMapper profitRecordMapper,
             UserReferralRelationMapper referralRelationMapper,
             AppUserMapper appUserMapper,
-            UserWalletMapper userWalletMapper,
             WalletService walletService
     ) {
         this.commissionRuleMapper = commissionRuleMapper;
@@ -74,7 +70,6 @@ public class CommissionService {
         this.profitRecordMapper = profitRecordMapper;
         this.referralRelationMapper = referralRelationMapper;
         this.appUserMapper = appUserMapper;
-        this.userWalletMapper = userWalletMapper;
         this.walletService = walletService;
     }
 
@@ -110,6 +105,7 @@ public class CommissionService {
         var page = new Page<CommissionRecord>(request.current(), request.size());
         var wrapper = new LambdaQueryWrapper<CommissionRecord>()
                 .eq(CommissionRecord::getBenefitUserId, userId)
+                .le(CommissionRecord::getLevelNo, MAX_COMMISSION_LEVEL)
                 .eq(request.levelNo() != null, CommissionRecord::getLevelNo, request.levelNo())
                 .eq(request.status() != null, CommissionRecord::getStatus,
                         request.status() == null ? null : request.status().name())
@@ -152,18 +148,18 @@ public class CommissionService {
     public CommissionSummaryResponse summary(Long userId) {
         var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
                 .eq(CommissionRecord::getBenefitUserId, userId)
+                .le(CommissionRecord::getLevelNo, MAX_COMMISSION_LEVEL)
                 .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name()));
         var today = DateTimeUtils.today();
         var yesterday = today.minusDays(1);
         var monthStart = today.withDayOfMonth(1);
         return new CommissionSummaryResponse(
-                walletTotalCommission(userId),
+                sumTotal(records),
                 sumByDate(records, today),
                 sumByDate(records, yesterday),
                 sumFromDate(records, monthStart),
                 sumByLevel(records, 1),
-                sumByLevel(records, 2),
-                sumByLevel(records, 3)
+                sumByLevel(records, 2)
         );
     }
 
@@ -230,7 +226,6 @@ public class CommissionService {
         }
         putIfPresent(result, CommissionLevel.LEVEL_1.levelNo(), referral.getLevel1UserId());
         putIfPresent(result, CommissionLevel.LEVEL_2.levelNo(), referral.getLevel2UserId());
-        putIfPresent(result, CommissionLevel.LEVEL_3.levelNo(), referral.getLevel3UserId());
         return result;
     }
 
@@ -243,7 +238,7 @@ public class CommissionService {
     private Map<Integer, BigDecimal> enabledRuleRates() {
         var rates = new HashMap<>(DEFAULT_RATES);
         commissionRuleMapper.selectList(new LambdaQueryWrapper<CommissionRule>()
-                        .in(CommissionRule::getLevelNo, 1, 2, 3)
+                        .in(CommissionRule::getLevelNo, 1, MAX_COMMISSION_LEVEL)
                         .eq(CommissionRule::getStatus, CommonStatus.ENABLED.value()))
                 .forEach(rule -> rates.put(rule.getLevelNo(), rule.getCommissionRate()));
         return rates;
@@ -257,11 +252,10 @@ public class CommissionService {
                 .set(RentalProfitRecord::getUpdatedAt, DateTimeUtils.now()));
     }
 
-    private BigDecimal walletTotalCommission(Long userId) {
-        var wallet = userWalletMapper.selectOne(new LambdaQueryWrapper<UserWallet>()
-                .eq(UserWallet::getUserId, userId)
-                .last("LIMIT 1"));
-        return wallet == null ? MoneyUtils.ZERO : MoneyUtils.scale(wallet.getTotalCommission());
+    private BigDecimal sumTotal(List<CommissionRecord> records) {
+        return MoneyUtils.scale(records.stream()
+                .map(CommissionRecord::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
     private BigDecimal sumByDate(List<CommissionRecord> records, LocalDate date) {

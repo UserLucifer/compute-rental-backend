@@ -7,6 +7,7 @@ import com.compute.rental.common.enums.SchedulerLogStatus;
 import com.compute.rental.common.util.DateTimeUtils;
 import com.compute.rental.modules.order.entity.RentalOrder;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
+import com.compute.rental.modules.order.mapper.RentalOrderRunSegmentMapper;
 import com.compute.rental.modules.system.service.SchedulerLogService;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -28,26 +29,29 @@ public class ProfitSettlementScheduler {
     private final SchedulerLockTemplate schedulerLockTemplate;
     private final SchedulerLogService schedulerLogService;
     private final RentalOrderMapper rentalOrderMapper;
+    private final RentalOrderRunSegmentMapper runSegmentMapper;
     private final ProfitSettlementSchedulerProcessor processor;
 
     public ProfitSettlementScheduler(
             SchedulerLockTemplate schedulerLockTemplate,
             SchedulerLogService schedulerLogService,
             RentalOrderMapper rentalOrderMapper,
+            RentalOrderRunSegmentMapper runSegmentMapper,
             ProfitSettlementSchedulerProcessor processor
     ) {
         this.schedulerLockTemplate = schedulerLockTemplate;
         this.schedulerLogService = schedulerLogService;
         this.rentalOrderMapper = rentalOrderMapper;
+        this.runSegmentMapper = runSegmentMapper;
         this.processor = processor;
     }
 
-    @Scheduled(cron = "${app.scheduler.daily-profit-cron:0 5 0 * * *}")
+    @Scheduled(cron = "${app.scheduler.daily-profit-cron:0 0 0 * * *}")
     public void scheduledDailyProfit() {
         runDailyProfit();
     }
 
-    @Scheduled(cron = "${app.scheduler.order-expire-settle-cron:0 10 0 * * *}")
+    @Scheduled(cron = "${app.scheduler.order-expire-settle-cron:0 * * * * *}")
     public void scheduledExpireSettlement() {
         runExpireSettlement();
     }
@@ -75,34 +79,32 @@ public class ProfitSettlementScheduler {
     private SchedulerRunResult doDailyProfit() {
         var taskName = SchedulerTaskNames.DAILY_PROFIT;
         var schedulerLog = schedulerLogService.start(taskName);
-        var today = DateTimeUtils.today();
         var now = DateTimeUtils.now();
-        var nextDayStart = today.plusDays(1).atStartOfDay();
+        var profitDate = DateTimeUtils.today().minusDays(1);
+        var profitWindowStart = profitDate.atStartOfDay();
+        var profitWindowEnd = profitDate.plusDays(1).atStartOfDay();
         var successCount = 0;
         var failCount = 0;
         var totalCount = 0;
         var errors = new ArrayList<String>();
-        var current = 1L;
-        Page<RentalOrder> result;
+        var lastOrderId = 0L;
+        java.util.List<Long> orderIds;
         do {
-            result = rentalOrderMapper.selectPage(new Page<>(current, PAGE_SIZE), new LambdaQueryWrapper<RentalOrder>()
-                    .eq(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name())
-                    .le(RentalOrder::getProfitStartAt, now)
-                    .ge(RentalOrder::getProfitEndAt, nextDayStart)
-                    .orderByAsc(RentalOrder::getId));
-            for (var order : result.getRecords()) {
+            orderIds = runSegmentMapper.selectOverlappingOrderIds(profitWindowStart, profitWindowEnd,
+                    lastOrderId, (int) PAGE_SIZE);
+            for (var orderId : orderIds) {
+                lastOrderId = orderId;
                 totalCount++;
                 try {
-                    processor.generateDailyProfit(order.getId(), today, now);
+                    processor.generateDailyProfit(orderId, profitDate, now);
                     successCount++;
                 } catch (Exception ex) {
                     failCount++;
-                    errors.add(order.getOrderNo() + ":" + ex.getMessage());
-                    log.warn("Daily profit failed, orderNo={}", order.getOrderNo(), ex);
+                    errors.add(orderId + ":" + ex.getMessage());
+                    log.warn("Daily profit failed, orderId={}", orderId, ex);
                 }
             }
-            current++;
-        } while (result.hasNext());
+        } while (orderIds.size() == PAGE_SIZE);
         var errorMessage = errors.isEmpty() ? null : String.join("; ", errors);
         schedulerLogService.finish(schedulerLog, totalCount, successCount, failCount, errorMessage);
         return result(taskName, totalCount, successCount, failCount, errorMessage);
@@ -120,7 +122,7 @@ public class ProfitSettlementScheduler {
         Page<RentalOrder> result;
         do {
             result = rentalOrderMapper.selectPage(new Page<>(current, PAGE_SIZE), new LambdaQueryWrapper<RentalOrder>()
-                    .eq(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name())
+                    .in(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name(), RentalOrderStatus.PAUSED.name())
                     .le(RentalOrder::getProfitEndAt, now)
                     .orderByAsc(RentalOrder::getId));
             for (var order : result.getRecords()) {

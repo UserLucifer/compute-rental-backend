@@ -11,6 +11,7 @@ import com.compute.rental.common.enums.RentalOrderSettlementStatus;
 import com.compute.rental.common.enums.RentalOrderStatus;
 import com.compute.rental.common.enums.RentalSettlementOrderStatus;
 import com.compute.rental.common.enums.RentalSettlementType;
+import com.compute.rental.common.enums.RunSegmentCloseReason;
 import com.compute.rental.common.enums.WalletBusinessType;
 import com.compute.rental.common.enums.WalletTransactionType;
 import com.compute.rental.common.exception.BusinessException;
@@ -27,6 +28,7 @@ import com.compute.rental.modules.order.mapper.ApiCredentialMapper;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
 import com.compute.rental.modules.order.mapper.RentalProfitRecordMapper;
 import com.compute.rental.modules.order.mapper.RentalSettlementOrderMapper;
+import com.compute.rental.modules.scheduler.service.RentalProfitGenerateService;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
 import java.util.Locale;
@@ -44,19 +46,25 @@ public class SettlementService {
     private final RentalProfitRecordMapper profitRecordMapper;
     private final ApiCredentialMapper apiCredentialMapper;
     private final WalletService walletService;
+    private final RentalOrderRunSegmentService runSegmentService;
+    private final RentalProfitGenerateService profitGenerateService;
 
     public SettlementService(
             RentalSettlementOrderMapper settlementOrderMapper,
             RentalOrderMapper rentalOrderMapper,
             RentalProfitRecordMapper profitRecordMapper,
             ApiCredentialMapper apiCredentialMapper,
-            WalletService walletService
+            WalletService walletService,
+            RentalOrderRunSegmentService runSegmentService,
+            RentalProfitGenerateService profitGenerateService
     ) {
         this.settlementOrderMapper = settlementOrderMapper;
         this.rentalOrderMapper = rentalOrderMapper;
         this.profitRecordMapper = profitRecordMapper;
         this.apiCredentialMapper = apiCredentialMapper;
         this.walletService = walletService;
+        this.runSegmentService = runSegmentService;
+        this.profitGenerateService = profitGenerateService;
     }
 
     public PageResult<SettlementOrderResponse> pageUserSettlementOrders(Long userId,
@@ -108,6 +116,10 @@ public class SettlementService {
         if (locked == 0) {
             throw new BusinessException(ErrorCode.CONCURRENT_UPDATE_FAILED, "租赁订单状态已变化");
         }
+        if (RentalOrderStatus.RUNNING.name().equals(order.getOrderStatus())) {
+            runSegmentService.closeOpenSegment(order.getId(), now, RunSegmentCloseReason.EARLY_SETTLE);
+        }
+        profitGenerateService.generateProfitUpTo(order, now, now);
         var profitAmount = settledProfitAmount(order.getId());
         var penaltyAmount = MoneyUtils.scale(order.getOrderAmount().multiply(order.getEarlyPenaltyRateSnapshot()));
         var actualSettleAmount = MoneyUtils.scale(order.getOrderAmount().subtract(penaltyAmount));
@@ -163,19 +175,27 @@ public class SettlementService {
         if (existing != null) {
             return existing;
         }
-        if (!RentalOrderStatus.RUNNING.name().equals(order.getOrderStatus())) {
+        if (!RentalOrderStatus.RUNNING.name().equals(order.getOrderStatus())
+                && !RentalOrderStatus.PAUSED.name().equals(order.getOrderStatus())) {
             return null;
         }
         var now = DateTimeUtils.now();
+        if (order.getProfitEndAt() == null || order.getProfitEndAt().isAfter(now)) {
+            return null;
+        }
         var locked = rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
                 .eq(RentalOrder::getId, order.getId())
-                .eq(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name())
+                .in(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name(), RentalOrderStatus.PAUSED.name())
                 .set(RentalOrder::getOrderStatus, RentalOrderStatus.SETTLING.name())
                 .set(RentalOrder::getSettlementStatus, RentalOrderSettlementStatus.SETTLING.name())
                 .set(RentalOrder::getUpdatedAt, now));
         if (locked == 0) {
             throw new BusinessException(ErrorCode.CONCURRENT_UPDATE_FAILED, "租赁订单状态已变化");
         }
+        if (RentalOrderStatus.RUNNING.name().equals(order.getOrderStatus())) {
+            runSegmentService.closeOpenSegment(order.getId(), order.getProfitEndAt(), RunSegmentCloseReason.EXPIRE);
+        }
+        profitGenerateService.generateProfitUpTo(order, order.getProfitEndAt(), now);
         var profitAmount = settledProfitAmount(order.getId());
         var settlement = buildSettlement(order, RentalSettlementType.EXPIRE, profitAmount,
                 MoneyUtils.ZERO, MoneyUtils.scale(order.getOrderAmount()), now);

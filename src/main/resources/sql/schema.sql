@@ -45,7 +45,6 @@ CREATE TABLE `user_referral_relation` (
   `parent_invite_code` VARCHAR(32) DEFAULT NULL COMMENT '注册时使用的邀请码',
   `level1_user_id`     BIGINT DEFAULT NULL COMMENT '一级返佣上级（直属上级），收益时拿20%',
   `level2_user_id`     BIGINT DEFAULT NULL COMMENT '二级返佣上级，收益时拿10%',
-  `level3_user_id`     BIGINT DEFAULT NULL COMMENT '三级返佣上级，收益时拿5%',
   `created_at`         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_id` (`user_id`),
@@ -53,7 +52,6 @@ CREATE TABLE `user_referral_relation` (
   KEY `idx_parent_user_id` (`parent_user_id`),
   KEY `idx_level1_user_id` (`level1_user_id`),
   KEY `idx_level2_user_id` (`level2_user_id`),
-  KEY `idx_level3_user_id` (`level3_user_id`),
   CONSTRAINT `fk_referral_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户推荐关系表';
 
@@ -61,7 +59,7 @@ CREATE TABLE `user_team_relation` (
   `id`                  BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `ancestor_user_id`    BIGINT NOT NULL COMMENT '上级用户ID',
   `descendant_user_id`  BIGINT NOT NULL COMMENT '下级用户ID',
-  `level_depth`         INT NOT NULL COMMENT '相对层级：1-直属，2-二级，3-三级，以此类推（无上限）',
+  `level_depth`         INT NOT NULL COMMENT '相对层级：1-直属，2-二级',
   `created_at`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_ancestor_descendant` (`ancestor_user_id`, `descendant_user_id`),
@@ -406,6 +404,7 @@ CREATE TABLE `rental_order` (
   KEY `idx_profit_status` (`profit_status`),
   KEY `idx_paid_at` (`paid_at`),
   KEY `idx_profit_time` (`profit_start_at`, `profit_end_at`),
+  KEY `idx_order_status_profit_end_at` (`order_status`, `profit_end_at`) COMMENT '用于到期结算定时任务扫描',
   KEY `idx_api_generated_at` (`api_generated_at`) COMMENT '用于超时取消定时任务扫描',
   KEY `idx_auto_pause_at` (`auto_pause_at`) COMMENT '用于自动暂停定时任务扫描',
   KEY `idx_created_at` (`created_at`),
@@ -414,6 +413,23 @@ CREATE TABLE `rental_order` (
   CONSTRAINT `fk_rental_order_ai_model` FOREIGN KEY (`ai_model_id`) REFERENCES `ai_model` (`id`),
   CONSTRAINT `fk_rental_order_cycle_rule` FOREIGN KEY (`cycle_rule_id`) REFERENCES `rental_cycle_rule` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='租赁订单主表';
+
+CREATE TABLE `rental_order_run_segment` (
+  `id`                BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `rental_order_id`   BIGINT NOT NULL COMMENT '租赁订单ID',
+  `user_id`           BIGINT NOT NULL COMMENT '用户ID',
+  `segment_start_at`  DATETIME NOT NULL COMMENT '本段运行开始时间',
+  `segment_end_at`    DATETIME DEFAULT NULL COMMENT '本段运行结束时间，NULL表示当前正在运行',
+  `close_reason`      VARCHAR(32) DEFAULT NULL COMMENT '关闭原因：AUTO_PAUSE/ADMIN_DISABLE/EXPIRE/EARLY_SETTLE',
+  `created_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_order_open` (`rental_order_id`, `segment_end_at`),
+  KEY `idx_profit_window` (`segment_start_at`, `segment_end_at`),
+  KEY `idx_user_start` (`user_id`, `segment_start_at`),
+  CONSTRAINT `fk_run_segment_order` FOREIGN KEY (`rental_order_id`) REFERENCES `rental_order` (`id`),
+  CONSTRAINT `fk_run_segment_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='租赁订单运行片段表';
 
 CREATE TABLE `api_credential` (
   `id`                    BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -485,6 +501,9 @@ CREATE TABLE `rental_profit_record` (
   `user_id`                  BIGINT NOT NULL COMMENT '用户ID',
   `rental_order_id`          BIGINT NOT NULL COMMENT '租赁订单ID',
   `profit_date`              DATE NOT NULL COMMENT '收益日期（UTC+8，按0点切割）',
+  `effective_minutes`        INT NOT NULL DEFAULT 1440 COMMENT '本收益日有效运行完整分钟数，不足1分钟不计',
+  `period_start_at`          DATETIME DEFAULT NULL COMMENT '本次收益计算有效开始时间',
+  `period_end_at`            DATETIME DEFAULT NULL COMMENT '本次收益计算有效结束时间',
   `gpu_daily_token_snapshot` BIGINT NOT NULL COMMENT 'GPU每日产出Token快照',
   `token_price_snapshot`     DECIMAL(20,8) NOT NULL COMMENT 'Token单价快照USDT',
   `yield_multiplier_snapshot` DECIMAL(10,4) NOT NULL COMMENT '周期收益倍率快照',
@@ -504,6 +523,7 @@ CREATE TABLE `rental_profit_record` (
   KEY `idx_status` (`status`),
   KEY `idx_status_profit_date` (`status`, `profit_date`),
   KEY `idx_commission_generated` (`commission_generated`),
+  KEY `idx_profit_period` (`period_start_at`, `period_end_at`),
   CONSTRAINT `fk_profit_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_profit_order` FOREIGN KEY (`rental_order_id`) REFERENCES `rental_order` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='每日收益明细表';
@@ -538,7 +558,7 @@ CREATE TABLE `rental_settlement_order` (
 
 CREATE TABLE `commission_rule` (
   `id`              BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `level_no`        INT NOT NULL COMMENT '层级：1-一级，2-二级，3-三级',
+  `level_no`        INT NOT NULL COMMENT '层级：1-一级，2-二级',
   `commission_rate` DECIMAL(10,4) NOT NULL COMMENT '佣金比例，如 0.2000（20%）',
   `status`          TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-停用',
   `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -554,7 +574,7 @@ CREATE TABLE `commission_record` (
   `source_user_id`           BIGINT NOT NULL COMMENT '产生收益的下级用户ID',
   `source_order_id`          BIGINT NOT NULL COMMENT '来源租赁订单ID',
   `source_profit_id`         BIGINT NOT NULL COMMENT '来源收益记录ID',
-  `level_no`                 INT NOT NULL COMMENT '佣金层级：1/2/3',
+  `level_no`                 INT NOT NULL COMMENT '佣金层级：1/2',
   `currency`                 VARCHAR(10) NOT NULL DEFAULT 'USDT' COMMENT '币种，固定USDT',
   `source_profit_amount`     DECIMAL(20,8) NOT NULL COMMENT '下级收益金额USDT',
   `commission_rate_snapshot` DECIMAL(10,4) NOT NULL COMMENT '佣金比例快照',

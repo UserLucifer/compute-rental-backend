@@ -39,6 +39,7 @@ public enum ErrorCode {
     LOGIN_TOKEN_INVALID(20011, "登录令牌无效", HttpStatus.UNAUTHORIZED),
     LOGIN_REQUIRED(20012, "请先登录", HttpStatus.UNAUTHORIZED),
     USER_NOT_FOUND(20013, "用户不存在", HttpStatus.NOT_FOUND),
+    USER_REENABLE_NOT_ALLOWED(20014, "用户禁用后不可重新启用", HttpStatus.BAD_REQUEST),
 
     REGION_NOT_FOUND(30001, "地区不存在", HttpStatus.NOT_FOUND),
     GPU_MODEL_NOT_FOUND(30002, "GPU 型号不存在", HttpStatus.NOT_FOUND),

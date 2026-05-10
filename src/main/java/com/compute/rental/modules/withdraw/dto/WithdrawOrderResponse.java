@@ -8,6 +8,8 @@ public record WithdrawOrderResponse(
         String withdrawNo,
         @Schema(description = "用户名称")
         String userName,
+        @Schema(description = "用户邮箱")
+        String email,
         String currency,
         String withdrawMethod,
         String network,

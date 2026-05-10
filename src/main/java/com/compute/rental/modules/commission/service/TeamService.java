@@ -19,6 +19,8 @@ import org.springframework.util.StringUtils;
 @Service
 public class TeamService {
 
+    private static final int MAX_TEAM_DEPTH = 2;
+
     private final UserTeamRelationMapper teamRelationMapper;
     private final AppUserMapper appUserMapper;
 
@@ -29,17 +31,19 @@ public class TeamService {
 
     public TeamSummaryResponse summary(Long userId) {
         var relations = teamRelationMapper.selectList(new LambdaQueryWrapper<UserTeamRelation>()
-                .eq(UserTeamRelation::getAncestorUserId, userId));
+                .eq(UserTeamRelation::getAncestorUserId, userId)
+                .le(UserTeamRelation::getLevelDepth, MAX_TEAM_DEPTH));
         return new TeamSummaryResponse(
                 relations.size(),
                 countDepth(relations, 1),
-                countDepth(relations, 2),
-                countDepth(relations, 3),
-                relations.stream().filter(relation -> relation.getLevelDepth() != null && relation.getLevelDepth() > 3).count()
+                countDepth(relations, 2)
         );
     }
 
     public PageResult<TeamMemberResponse> pageMembers(Long userId, TeamMemberQueryRequest request) {
+        if (request.levelDepth() != null && request.levelDepth() > MAX_TEAM_DEPTH) {
+            return new PageResult<>(List.of(), 0, request.current(), request.size());
+        }
         var matchedUserIds = findMatchedUserIds(request.normalizedKeyword());
         if (matchedUserIds != null && matchedUserIds.isEmpty()) {
             return new PageResult<>(List.of(), 0, request.current(), request.size());
@@ -48,6 +52,7 @@ public class TeamService {
         var page = new Page<UserTeamRelation>(request.current(), request.size());
         var wrapper = new LambdaQueryWrapper<UserTeamRelation>()
                 .eq(UserTeamRelation::getAncestorUserId, userId)
+                .le(UserTeamRelation::getLevelDepth, MAX_TEAM_DEPTH)
                 .eq(request.levelDepth() != null, UserTeamRelation::getLevelDepth, request.levelDepth())
                 .in(matchedUserIds != null, UserTeamRelation::getDescendantUserId, matchedUserIds)
                 .orderByAsc(UserTeamRelation::getLevelDepth)
@@ -89,7 +94,8 @@ public class TeamService {
         var usersById = appUserMapper.selectBatchIds(descendantIds).stream()
                 .collect(Collectors.toMap(AppUser::getId, Function.identity()));
         var subTeamCounts = teamRelationMapper.selectList(new LambdaQueryWrapper<UserTeamRelation>()
-                        .in(UserTeamRelation::getAncestorUserId, descendantIds))
+                        .in(UserTeamRelation::getAncestorUserId, descendantIds)
+                        .le(UserTeamRelation::getLevelDepth, MAX_TEAM_DEPTH))
                 .stream()
                 .collect(Collectors.groupingBy(UserTeamRelation::getAncestorUserId, Collectors.counting()));
         var parentInternalIdsByDescendant = teamRelationMapper.selectList(new LambdaQueryWrapper<UserTeamRelation>()

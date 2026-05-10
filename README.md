@@ -18,7 +18,12 @@ Spring Boot 3.2.x 后端工程骨架，按《算力租赁平台_正式开发版_
 
 ## 启动前配置
 
-本地开发复制 `application-local.example.yml` 为 `application-local.yml`，并替换数据库、Redis、RabbitMQ、JWT 密钥等配置。`application-local.yml` 已在 `.gitignore` 中，真实密钥不要提交到仓库。
+后端只保留两套 yml 配置：
+
+- `src/main/resources/application.yml`：本地环境，默认激活 `local`。
+- `src/main/resources/application-prod.yml`：生产环境，使用 `SPRING_PROFILES_ACTIVE=prod`。
+
+本地开发直接改 `application.yml` 或通过环境变量覆盖数据库、Redis、RabbitMQ、JWT 密钥等配置。真实密钥不要提交到仓库。
 
 生产环境使用 `prod` profile，并通过环境变量或部署平台密钥注入配置：
 
@@ -40,6 +45,8 @@ WEBSOCKET_ALLOWED_ORIGINS=https://admin.example.com,https://app.example.com
 ```
 
 `prod` profile 会强制校验生产配置：禁止开发占位密钥、本机 DB/Redis/RabbitMQ、RabbitMQ `guest/guest`、空 Redis 密码、通配 WebSocket Origin，并默认关闭 Knife4j/springdoc。
+
+定时任务配置分两类：`app.order.auto-pause-delay` 是自动暂停业务延迟；`app.scheduler.auto-pause-cron` 只是扫描频率。本地默认和生产保持一致，测试加速配置只作为注释放在 `application.yml` 中，需要时手动切换。
 
 默认开发库名：
 

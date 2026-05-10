@@ -8,6 +8,8 @@ public record RechargeOrderResponse(
         String rechargeNo,
         @Schema(description = "用户名称")
         String userName,
+        @Schema(description = "用户邮箱")
+        String email,
         Long channelId,
         String currency,
         String channelName,

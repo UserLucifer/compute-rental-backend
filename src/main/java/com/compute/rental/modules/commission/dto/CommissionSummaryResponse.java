@@ -8,7 +8,6 @@ public record CommissionSummaryResponse(
         BigDecimal yesterdayCommission,
         BigDecimal currentMonthCommission,
         BigDecimal level1Commission,
-        BigDecimal level2Commission,
-        BigDecimal level3Commission
+        BigDecimal level2Commission
 ) {
 }

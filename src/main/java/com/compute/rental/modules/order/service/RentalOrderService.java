@@ -54,6 +54,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -80,6 +81,8 @@ public class RentalOrderService {
     private final ApiTokenCryptoService apiTokenCryptoService;
     private final ApiTokenProperties apiTokenProperties;
     private final RedisLockClient redisLockClient;
+    private final RentalOrderRunSegmentService runSegmentService;
+    private final Duration autoPauseDelay;
 
     public RentalOrderService(
             RentalOrderMapper rentalOrderMapper,
@@ -94,7 +97,9 @@ public class RentalOrderService {
             WalletService walletService,
             ApiTokenCryptoService apiTokenCryptoService,
             ApiTokenProperties apiTokenProperties,
-            RedisLockClient redisLockClient
+            RedisLockClient redisLockClient,
+            RentalOrderRunSegmentService runSegmentService,
+            @Value("${app.order.auto-pause-delay:24h}") Duration autoPauseDelay
     ) {
         this.rentalOrderMapper = rentalOrderMapper;
         this.apiDeployOrderMapper = apiDeployOrderMapper;
@@ -109,6 +114,8 @@ public class RentalOrderService {
         this.apiTokenCryptoService = apiTokenCryptoService;
         this.apiTokenProperties = apiTokenProperties;
         this.redisLockClient = redisLockClient;
+        this.runSegmentService = runSegmentService;
+        this.autoPauseDelay = autoPauseDelay == null ? Duration.ofHours(24) : autoPauseDelay;
     }
 
     @Transactional
@@ -266,7 +273,7 @@ public class RentalOrderService {
         }
 
         var now = DateTimeUtils.now();
-        var autoPauseAt = now.plusHours(24);
+        var autoPauseAt = now.plus(autoPauseDelay);
         var deployOrder = createPendingDeployOrder(order, credential, now);
         if (ApiDeployOrderStatus.PAID.name().equals(deployOrder.getStatus())) {
             return toDeployOrderResponse(order, credential, deployOrder);
@@ -317,6 +324,7 @@ public class RentalOrderService {
         if (updatedOrder == 0) {
             throw new BusinessException(ErrorCode.CONCURRENT_UPDATE_FAILED, "租赁订单状态已变化");
         }
+        runSegmentService.openSegment(order, now);
         // TODO: create sys_notification API_ACTIVATED after notification service is implemented.
 
         var paidDeployOrder = findDeployOrder(order.getId(), credential.getId());
@@ -348,6 +356,9 @@ public class RentalOrderService {
             throw new BusinessException(ErrorCode.API_CREDENTIAL_NOT_PAUSED);
         }
         var now = DateTimeUtils.now();
+        if (order.getProfitEndAt() != null && !order.getProfitEndAt().isAfter(now)) {
+            throw new BusinessException(ErrorCode.RENTAL_ORDER_NOT_STARTABLE, "订单已到期，等待系统结算");
+        }
         var profitStartAt = order.getProfitStartAt() == null ? now : order.getProfitStartAt();
         var profitEndAt = order.getProfitEndAt() == null ? profitStartAt.plusDays(order.getCycleDaysSnapshot()) : order.getProfitEndAt();
         var updatedOrder = rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
@@ -371,6 +382,7 @@ public class RentalOrderService {
         if (updatedCredential == 0) {
             throw new BusinessException(ErrorCode.API_CREDENTIAL_STATUS_CHANGED);
         }
+        runSegmentService.openSegment(order, now);
         return getUserOrder(userId, orderNo);
     }
 

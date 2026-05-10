@@ -10,8 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.compute.rental.modules.system.controller.AdminAuthController;
 import com.compute.rental.modules.system.dto.AdminLoginResponse;
 import com.compute.rental.modules.system.dto.AdminMeResponse;
+import com.compute.rental.modules.system.entity.SysAdmin;
+import com.compute.rental.modules.system.mapper.SysAdminMapper;
 import com.compute.rental.modules.system.service.AdminAuthService;
 import com.compute.rental.modules.system.service.AdminLogService;
+import com.compute.rental.modules.user.entity.AppUser;
+import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.common.enums.ErrorCode;
 import com.compute.rental.security.jwt.JwtAuthenticationFilter;
 import com.compute.rental.security.jwt.JwtTokenProvider;
@@ -79,6 +83,12 @@ class SecurityConfigTest {
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
+    @MockBean
+    private AppUserMapper appUserMapper;
+
+    @MockBean
+    private SysAdminMapper sysAdminMapper;
+
     @Test
     void adminLoginIsPublic() throws Exception {
         var admin = new AdminMeResponse(1L, "admin", 1, "SUPER_ADMIN");
@@ -101,6 +111,7 @@ class SecurityConfigTest {
 
         var principal = new JwtPrincipal(1L, "admin", "SUPER_ADMIN", IdentityType.ADMIN.name());
         when(jwtTokenProvider.parse("TOKEN")).thenReturn(principal);
+        when(sysAdminMapper.selectById(1L)).thenReturn(admin(1L));
         when(adminAuthService.me(1L)).thenReturn(new AdminMeResponse(1L, "admin", 1, "SUPER_ADMIN"));
 
         mockMvc.perform(get("/api/admin/auth/me")
@@ -139,5 +150,45 @@ class SecurityConfigTest {
                         .content("{}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(ErrorCode.LOGIN_REQUIRED.code()));
+    }
+
+    @Test
+    void disabledUserTokenShouldBeRejectedOnProtectedEndpoint() throws Exception {
+        var principal = new JwtPrincipal(10L, "U001", "USER", IdentityType.USER.name());
+        var disabled = new AppUser();
+        disabled.setId(10L);
+        disabled.setStatus(0);
+        when(jwtTokenProvider.parse("USER_TOKEN")).thenReturn(principal);
+        when(appUserMapper.selectById(10L)).thenReturn(disabled);
+
+        mockMvc.perform(post("/api/products")
+                        .header("Authorization", "Bearer USER_TOKEN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(ErrorCode.LOGIN_REQUIRED.code()));
+    }
+
+    @Test
+    void enabledUserTokenShouldAccessUserEndpoint() throws Exception {
+        var principal = new JwtPrincipal(10L, "U001", "USER", IdentityType.USER.name());
+        var enabled = new AppUser();
+        enabled.setId(10L);
+        enabled.setStatus(1);
+        when(jwtTokenProvider.parse("USER_TOKEN")).thenReturn(principal);
+        when(appUserMapper.selectById(10L)).thenReturn(enabled);
+
+        mockMvc.perform(post("/api/products")
+                        .header("Authorization", "Bearer USER_TOKEN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+    }
+
+    private SysAdmin admin(Long id) {
+        var admin = new SysAdmin();
+        admin.setId(id);
+        admin.setStatus(1);
+        return admin;
     }
 }

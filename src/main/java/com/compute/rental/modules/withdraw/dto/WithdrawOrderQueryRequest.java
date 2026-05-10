@@ -16,6 +16,8 @@ public record WithdrawOrderQueryRequest(
 
         WithdrawOrderStatus status,
 
+        String keyword,
+
         @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         LocalDateTime startTime,
 

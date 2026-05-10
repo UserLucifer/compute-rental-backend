@@ -1,5 +1,9 @@
 package com.compute.rental.security.jwt;
 
+import com.compute.rental.common.enums.CommonStatus;
+import com.compute.rental.modules.system.mapper.SysAdminMapper;
+import com.compute.rental.modules.user.mapper.AppUserMapper;
+import com.compute.rental.security.JwtPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,9 +27,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final AppUserMapper appUserMapper;
+    private final SysAdminMapper sysAdminMapper;
 
-    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
+    public JwtAuthenticationFilter(
+            JwtTokenProvider jwtTokenProvider,
+            AppUserMapper appUserMapper,
+            SysAdminMapper sysAdminMapper
+    ) {
         this.jwtTokenProvider = jwtTokenProvider;
+        this.appUserMapper = appUserMapper;
+        this.sysAdminMapper = sysAdminMapper;
     }
 
     @Override
@@ -35,9 +47,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 var principal = jwtTokenProvider.parse(token);
-                var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + principal.identityType()));
-                var authentication = new UsernamePasswordAuthenticationToken(principal, token, authorities);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                if (isEnabled(principal)) {
+                    var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + principal.identityType()));
+                    var authentication = new UsernamePasswordAuthenticationToken(principal, token, authorities);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
             } catch (RuntimeException ex) {
                 log.debug("JWT authentication failed", ex);
                 SecurityContextHolder.clearContext();
@@ -52,5 +66,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return null;
         }
         return authorization.substring(BEARER_PREFIX.length());
+    }
+
+    private boolean isEnabled(JwtPrincipal principal) {
+        if (principal.isAdmin()) {
+            var admin = sysAdminMapper.selectById(principal.id());
+            return admin != null && Integer.valueOf(CommonStatus.ENABLED.value()).equals(admin.getStatus());
+        }
+        if (principal.isUser()) {
+            var user = appUserMapper.selectById(principal.id());
+            return user != null && Integer.valueOf(CommonStatus.ENABLED.value()).equals(user.getStatus());
+        }
+        return false;
     }
 }

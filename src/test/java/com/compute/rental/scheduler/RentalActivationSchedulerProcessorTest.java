@@ -12,12 +12,14 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.compute.rental.common.enums.ApiTokenStatus;
 import com.compute.rental.common.enums.ErrorCode;
 import com.compute.rental.common.enums.RentalOrderStatus;
+import com.compute.rental.common.enums.RunSegmentCloseReason;
 import com.compute.rental.common.enums.WalletBusinessType;
 import com.compute.rental.common.exception.BusinessException;
 import com.compute.rental.modules.order.entity.ApiCredential;
 import com.compute.rental.modules.order.entity.RentalOrder;
 import com.compute.rental.modules.order.mapper.ApiCredentialMapper;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
+import com.compute.rental.modules.order.service.RentalOrderRunSegmentService;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -42,6 +44,9 @@ class RentalActivationSchedulerProcessorTest {
     @Mock
     private WalletService walletService;
 
+    @Mock
+    private RentalOrderRunSegmentService runSegmentService;
+
     @InjectMocks
     private RentalActivationSchedulerProcessor processor;
 
@@ -58,10 +63,10 @@ class RentalActivationSchedulerProcessorTest {
         when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.PENDING_ACTIVATION, now.minusHours(2)));
         when(rentalOrderMapper.update(any(), any(Wrapper.class))).thenReturn(1);
 
-        processor.cancelActivationTimeout(1L, now.minusHours(1));
+        processor.cancelDeployFeeTimeout(1L, now.minusHours(1));
 
         verify(walletService).credit(eq(10L), any(BigDecimal.class), eq(WalletBusinessType.REFUND),
-                eq("RO001"), eq("ACTIVATION_TIMEOUT"), any());
+                eq("RO001"), eq("DEPLOY_FEE_TIMEOUT"), any());
         verify(apiCredentialMapper).update(any(), any(Wrapper.class));
     }
 
@@ -70,7 +75,7 @@ class RentalActivationSchedulerProcessorTest {
         var now = LocalDateTime.now();
         when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.PENDING_ACTIVATION, now.minusMinutes(10)));
 
-        processor.cancelActivationTimeout(1L, now.minusHours(1));
+        processor.cancelDeployFeeTimeout(1L, now.minusHours(1));
 
         verify(walletService, never()).credit(any(), any(), any(), any(), any(), any());
         verify(apiCredentialMapper, never()).update(any(), any(Wrapper.class));
@@ -80,7 +85,7 @@ class RentalActivationSchedulerProcessorTest {
     void repeatedTimeoutRunShouldNotRefundChangedOrderAgain() {
         when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.CANCELED, LocalDateTime.now().minusHours(2)));
 
-        processor.cancelActivationTimeout(1L, LocalDateTime.now().minusHours(1));
+        processor.cancelDeployFeeTimeout(1L, LocalDateTime.now().minusHours(1));
 
         verify(walletService, never()).credit(any(), any(), any(), any(), any(), any());
     }
@@ -97,6 +102,7 @@ class RentalActivationSchedulerProcessorTest {
 
         verify(rentalOrderMapper).update(any(), any(Wrapper.class));
         verify(apiCredentialMapper).update(any(), any(Wrapper.class));
+        verify(runSegmentService).closeOpenSegment(eq(1L), eq(now), eq(RunSegmentCloseReason.AUTO_PAUSE));
         verify(walletService, never()).credit(any(), any(), any(), any(), any(), any());
     }
 

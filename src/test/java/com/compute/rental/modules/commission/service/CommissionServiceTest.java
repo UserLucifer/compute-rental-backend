@@ -23,9 +23,7 @@ import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.entity.UserReferralRelation;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.user.mapper.UserReferralRelationMapper;
-import com.compute.rental.modules.wallet.entity.UserWallet;
 import com.compute.rental.modules.wallet.entity.WalletTransaction;
-import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
 import java.util.List;
@@ -61,9 +59,6 @@ class CommissionServiceTest {
     private AppUserMapper appUserMapper;
 
     @Mock
-    private UserWalletMapper userWalletMapper;
-
-    @Mock
     private WalletService walletService;
 
     @Captor
@@ -80,13 +75,12 @@ class CommissionServiceTest {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RentalProfitRecord.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), AppUser.class);
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), UserReferralRelation.class);
-        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), UserWallet.class);
     }
 
     @Test
-    void shouldGenerateThreeLevelCommissionsWithDefaultRates() {
+    void shouldGenerateTwoLevelCommissionsWithDefaultRates() {
         when(profitRecordMapper.selectById(1L)).thenReturn(settledProfit(1L, 100L, new BigDecimal("100.00000000")));
-        when(referralRelationMapper.selectOne(any(Wrapper.class))).thenReturn(referral(11L, 12L, 13L));
+        when(referralRelationMapper.selectOne(any(Wrapper.class))).thenReturn(referral(11L, 12L));
         when(commissionRuleMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
         when(commissionRecordMapper.selectOne(any(Wrapper.class))).thenReturn(null);
         when(commissionRecordMapper.insert(any(CommissionRecord.class))).thenAnswer(invocation -> {
@@ -100,7 +94,7 @@ class CommissionServiceTest {
 
         commissionService.generateForProfit(1L);
 
-        verify(commissionRecordMapper, org.mockito.Mockito.times(3)).insert(commissionRecordCaptor.capture());
+        verify(commissionRecordMapper, org.mockito.Mockito.times(2)).insert(commissionRecordCaptor.capture());
         var recordsByLevel = commissionRecordCaptor.getAllValues().stream()
                 .collect(Collectors.toMap(CommissionRecord::getLevelNo, record -> record));
         assertThat(recordsByLevel.get(1).getBenefitUserId()).isEqualTo(11L);
@@ -109,22 +103,17 @@ class CommissionServiceTest {
         assertThat(recordsByLevel.get(2).getBenefitUserId()).isEqualTo(12L);
         assertThat(recordsByLevel.get(2).getCommissionRateSnapshot()).isEqualByComparingTo("0.1000");
         assertThat(recordsByLevel.get(2).getCommissionAmount()).isEqualByComparingTo("10.00000000");
-        assertThat(recordsByLevel.get(3).getBenefitUserId()).isEqualTo(13L);
-        assertThat(recordsByLevel.get(3).getCommissionRateSnapshot()).isEqualByComparingTo("0.0500");
-        assertThat(recordsByLevel.get(3).getCommissionAmount()).isEqualByComparingTo("5.00000000");
         verify(walletService).creditWithIdempotencyKey(eq(11L), any(), eq(WalletBusinessType.COMMISSION_PROFIT),
                 any(), eq("COMMISSION_PROFIT:1:1"), any());
         verify(walletService).creditWithIdempotencyKey(eq(12L), any(), eq(WalletBusinessType.COMMISSION_PROFIT),
                 any(), eq("COMMISSION_PROFIT:1:2"), any());
-        verify(walletService).creditWithIdempotencyKey(eq(13L), any(), eq(WalletBusinessType.COMMISSION_PROFIT),
-                any(), eq("COMMISSION_PROFIT:1:3"), any());
         verify(profitRecordMapper).update(any(), any(Wrapper.class));
     }
 
     @Test
     void shouldUseEnabledRuleRatesAsSnapshots() {
         when(profitRecordMapper.selectById(1L)).thenReturn(settledProfit(1L, 100L, new BigDecimal("100.00000000")));
-        when(referralRelationMapper.selectOne(any(Wrapper.class))).thenReturn(referral(11L, null, null));
+        when(referralRelationMapper.selectOne(any(Wrapper.class))).thenReturn(referral(11L, null));
         when(commissionRuleMapper.selectList(any(Wrapper.class))).thenReturn(List.of(rule(1, "0.2500")));
         when(commissionRecordMapper.selectOne(any(Wrapper.class))).thenReturn(null);
         when(commissionRecordMapper.insert(any(CommissionRecord.class))).thenAnswer(invocation -> {
@@ -235,12 +224,11 @@ class CommissionServiceTest {
         return profit;
     }
 
-    private UserReferralRelation referral(Long level1UserId, Long level2UserId, Long level3UserId) {
+    private UserReferralRelation referral(Long level1UserId, Long level2UserId) {
         var referral = new UserReferralRelation();
         referral.setUserId(100L);
         referral.setLevel1UserId(level1UserId);
         referral.setLevel2UserId(level2UserId);
-        referral.setLevel3UserId(level3UserId);
         return referral;
     }
 

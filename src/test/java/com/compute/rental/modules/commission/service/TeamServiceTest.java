@@ -42,22 +42,17 @@ class TeamServiceTest {
     }
 
     @Test
-    void teamSummaryShouldCountDeeperMembersWithoutCommissionDepthLimit() {
+    void teamSummaryShouldOnlyCountTwoLevelMembers() {
         when(teamRelationMapper.selectList(any(Wrapper.class))).thenReturn(List.of(
                 relation(1),
-                relation(2),
-                relation(3),
-                relation(4),
-                relation(8)
+                relation(2)
         ));
 
         var summary = teamService.summary(10L);
 
-        assertThat(summary.totalTeamCount()).isEqualTo(5);
+        assertThat(summary.totalTeamCount()).isEqualTo(2);
         assertThat(summary.directTeamCount()).isEqualTo(1);
         assertThat(summary.level2TeamCount()).isEqualTo(1);
-        assertThat(summary.level3TeamCount()).isEqualTo(1);
-        assertThat(summary.deeperTeamCount()).isEqualTo(2);
     }
 
     @Test

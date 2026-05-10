@@ -34,9 +34,6 @@ public class UserReferralRelation {
     @TableField("level2_user_id")
     private Long level2UserId;
 
-    @TableField("level3_user_id")
-    private Long level3UserId;
-
     @TableField("created_at")
     private LocalDateTime createdAt;
 

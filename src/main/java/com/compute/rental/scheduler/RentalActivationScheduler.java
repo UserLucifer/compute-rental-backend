@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 public class RentalActivationScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(RentalActivationScheduler.class);
-    private static final String ACTIVATION_TIMEOUT_LOCK = "scheduler:activation_timeout_cancel";
+    private static final String DEPLOY_FEE_TIMEOUT_LOCK = "scheduler:deploy_fee_timeout_cancel";
     private static final String AUTO_PAUSE_LOCK = "scheduler:auto_pause";
     private static final Duration LOCK_TTL = Duration.ofMinutes(9);
 
@@ -45,9 +45,9 @@ public class RentalActivationScheduler {
         this.processor = processor;
     }
 
-    @Scheduled(cron = "${app.scheduler.activation-timeout-cancel-cron:0 */10 * * * *}")
-    public void scheduledActivationTimeoutCancel() {
-        runActivationTimeoutCancel();
+    @Scheduled(cron = "${app.scheduler.deploy-fee-timeout-cancel-cron:${app.scheduler.activation-timeout-cancel-cron:0 */10 * * * *}}")
+    public void scheduledDeployFeeTimeoutCancel() {
+        runDeployFeeTimeoutCancel();
     }
 
     @Scheduled(cron = "${app.scheduler.auto-pause-cron:0 */5 * * * *}")
@@ -55,14 +55,18 @@ public class RentalActivationScheduler {
         runAutoPause();
     }
 
-    public SchedulerRunResult runActivationTimeoutCancel() {
+    public SchedulerRunResult runDeployFeeTimeoutCancel() {
         var result = new AtomicReference<SchedulerRunResult>();
-        var acquired = schedulerLockTemplate.runWithLock(ACTIVATION_TIMEOUT_LOCK, LOCK_TTL,
-                () -> result.set(doActivationTimeoutCancel()));
+        var acquired = schedulerLockTemplate.runWithLock(DEPLOY_FEE_TIMEOUT_LOCK, LOCK_TTL,
+                () -> result.set(doDeployFeeTimeoutCancel()));
         if (!acquired) {
-            return skipped(SchedulerTaskNames.ACTIVATION_TIMEOUT_CANCEL);
+            return skipped(SchedulerTaskNames.DEPLOY_FEE_TIMEOUT_CANCEL);
         }
         return result.get();
+    }
+
+    public SchedulerRunResult runActivationTimeoutCancel() {
+        return runDeployFeeTimeoutCancel();
     }
 
     public SchedulerRunResult runAutoPause() {
@@ -75,8 +79,8 @@ public class RentalActivationScheduler {
         return result.get();
     }
 
-    private SchedulerRunResult doActivationTimeoutCancel() {
-        var taskName = SchedulerTaskNames.ACTIVATION_TIMEOUT_CANCEL;
+    private SchedulerRunResult doDeployFeeTimeoutCancel() {
+        var taskName = SchedulerTaskNames.DEPLOY_FEE_TIMEOUT_CANCEL;
         var schedulerLog = schedulerLogService.start(taskName);
         var successCount = 0;
         var failCount = 0;
@@ -90,12 +94,12 @@ public class RentalActivationScheduler {
                 .orderByAsc(RentalOrder::getId));
         for (var order : orders) {
             try {
-                processor.cancelActivationTimeout(order.getId(), cutoffTime);
+                processor.cancelDeployFeeTimeout(order.getId(), cutoffTime);
                 successCount++;
             } catch (Exception ex) {
                 failCount++;
                 errors.add(order.getOrderNo() + ":" + ex.getMessage());
-                log.warn("Activation timeout cancel failed, orderNo={}", order.getOrderNo(), ex);
+                log.warn("Deploy fee timeout cancel failed, orderNo={}", order.getOrderNo(), ex);
             }
         }
         var errorMessage = errors.isEmpty() ? null : String.join("; ", errors);

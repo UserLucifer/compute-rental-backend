@@ -8,8 +8,8 @@ logging:
     com.baomidou.mybatisplus: INFO
 
 spring:
-  config:
-    import: optional:file:./application-local.yml
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
   application:
     name: compute-rental-backend
   jackson:
@@ -103,8 +103,22 @@ app:
     email-subject: Compute Rental login verification code
   websocket:
     allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:3000}
+  order:
+    # 本地默认和生产一致：部署费支付后 24 小时自动暂停。
+#    auto-pause-delay: ${APP_ORDER_AUTO_PAUSE_DELAY:24h}
+    # 本地测试自动暂停时，注释上面的 24h，打开下面的 5m；测完恢复 24h。
+     auto-pause-delay: ${APP_ORDER_AUTO_PAUSE_DELAY:5m}
   scheduler:
-    daily-profit-cron: 0 5 0 * * *
-    order-expire-settle-cron: 0 10 0 * * *
-    auto-pause-cron: 0 */5 * * * *
-    activation-timeout-cancel-cron: 0 */10 * * * *
+    # 本地默认和生产一致。
+#    daily-profit-cron: "${APP_SCHEDULER_DAILY_PROFIT_CRON:0 0 0 * * *}"
+#    order-expire-settle-cron: "${APP_SCHEDULER_ORDER_EXPIRE_SETTLE_CRON:0 * * * * *}"
+#    auto-pause-cron: "${APP_SCHEDULER_AUTO_PAUSE_CRON:0 */5 * * * *}"
+#    deploy-fee-timeout-cancel-cron: "${APP_SCHEDULER_DEPLOY_FEE_TIMEOUT_CANCEL_CRON:0 */10 * * * *}"
+#    commission-generate-cron: "${APP_SCHEDULER_COMMISSION_GENERATE_CRON:0 */5 * * * *}"
+
+     #本地测试加速配置：需要时注释上面同名配置，再打开下面同名配置；测完恢复上面的生产标准。
+     daily-profit-cron: "${APP_SCHEDULER_DAILY_PROFIT_CRON:0 */10 * * * *}"
+     order-expire-settle-cron: "${APP_SCHEDULER_ORDER_EXPIRE_SETTLE_CRON:0 * * * * *}"
+     auto-pause-cron: "${APP_SCHEDULER_AUTO_PAUSE_CRON:0 * * * * *}"
+     deploy-fee-timeout-cancel-cron: "${APP_SCHEDULER_DEPLOY_FEE_TIMEOUT_CANCEL_CRON:0 */10 * * * *}"
+     commission-generate-cron: "${APP_SCHEDULER_COMMISSION_GENERATE_CRON:0 * * * * *}"

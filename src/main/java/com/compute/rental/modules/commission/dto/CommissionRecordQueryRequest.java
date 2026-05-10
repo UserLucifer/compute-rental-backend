@@ -14,6 +14,8 @@ public record CommissionRecordQueryRequest(
         @Max(100)
         Integer pageSize,
 
+        @Min(1)
+        @Max(2)
         Integer levelNo,
 
         RecordSettleStatus status,

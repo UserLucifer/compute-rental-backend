@@ -60,15 +60,15 @@ class RentalActivationSchedulerTest {
         });
         var log = new SchedulerLog();
         log.setId(1L);
-        when(schedulerLogService.start(SchedulerTaskNames.ACTIVATION_TIMEOUT_CANCEL)).thenReturn(log);
+        when(schedulerLogService.start(SchedulerTaskNames.DEPLOY_FEE_TIMEOUT_CANCEL)).thenReturn(log);
         when(sysConfigService.getInteger(eq(SysConfigDefaults.ORDER_PENDING_ACTIVATION_TIMEOUT_MINUTES), eq(60)))
                 .thenReturn(60);
         var first = order(1L, "RO001");
         var second = order(2L, "RO002");
         when(rentalOrderMapper.selectList(any(Wrapper.class))).thenReturn(List.of(first, second));
-        doThrow(new RuntimeException("failed")).when(processor).cancelActivationTimeout(eq(1L), any());
+        doThrow(new RuntimeException("failed")).when(processor).cancelDeployFeeTimeout(eq(1L), any());
 
-        var result = scheduler.runActivationTimeoutCancel();
+        var result = scheduler.runDeployFeeTimeoutCancel();
 
         assertThat(result.totalCount()).isEqualTo(2);
         assertThat(result.successCount()).isEqualTo(1);

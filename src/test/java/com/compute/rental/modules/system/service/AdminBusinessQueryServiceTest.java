@@ -1,6 +1,7 @@
 package com.compute.rental.modules.system.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -10,7 +11,10 @@ import static org.mockito.Mockito.when;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.compute.rental.common.enums.ApiTokenStatus;
+import com.compute.rental.common.enums.ErrorCode;
 import com.compute.rental.common.enums.RentalOrderStatus;
+import com.compute.rental.common.enums.RunSegmentCloseReason;
+import com.compute.rental.common.exception.BusinessException;
 import com.compute.rental.modules.commission.mapper.CommissionRecordMapper;
 import com.compute.rental.modules.order.entity.ApiCredential;
 import com.compute.rental.modules.order.entity.RentalOrder;
@@ -19,6 +23,7 @@ import com.compute.rental.modules.order.mapper.ApiDeployOrderMapper;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
 import com.compute.rental.modules.order.mapper.RentalProfitRecordMapper;
 import com.compute.rental.modules.order.mapper.RentalSettlementOrderMapper;
+import com.compute.rental.modules.order.service.RentalOrderRunSegmentService;
 import com.compute.rental.modules.system.mapper.SysAdminLogMapper;
 import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.entity.UserTeamRelation;
@@ -64,6 +69,8 @@ class AdminBusinessQueryServiceTest {
     private SysAdminLogMapper adminLogMapper;
     @Mock
     private AdminLogService adminLogService;
+    @Mock
+    private RentalOrderRunSegmentService runSegmentService;
 
     private AdminBusinessQueryService service;
 
@@ -79,7 +86,8 @@ class AdminBusinessQueryServiceTest {
     void setUp() {
         service = new AdminBusinessQueryService(appUserMapper, userWalletMapper, walletTransactionMapper,
                 rentalOrderMapper, apiCredentialMapper, apiDeployOrderMapper, profitRecordMapper,
-                settlementOrderMapper, commissionRecordMapper, teamRelationMapper, adminLogMapper, adminLogService);
+                settlementOrderMapper, commissionRecordMapper, teamRelationMapper, adminLogMapper, adminLogService,
+                runSegmentService);
     }
 
     @Test
@@ -103,8 +111,22 @@ class AdminBusinessQueryServiceTest {
         assertEquals(10L, result.id());
         verify(rentalOrderMapper).update(isNull(), any());
         verify(apiCredentialMapper).update(isNull(), any());
+        verify(runSegmentService).closeOpenSegment(eq(20L), any(), eq(RunSegmentCloseReason.ADMIN_DISABLE));
         verify(adminLogService).log(eq(1L), eq("BAN_USER"), eq("app_user"), eq(10L),
                 isNull(), eq("status=0"), any(), eq("127.0.0.1"));
+    }
+
+    @Test
+    void disabledUserShouldNotBeEnabledAgain() {
+        var user = new AppUser();
+        user.setId(10L);
+        user.setStatus(0);
+        when(appUserMapper.selectById(10L)).thenReturn(user);
+
+        assertThatThrownBy(() -> service.enableUser(10L, 1L, "127.0.0.1"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_REENABLE_NOT_ALLOWED);
     }
 
     @Test
@@ -161,7 +183,7 @@ class AdminBusinessQueryServiceTest {
         when(walletTransactionMapper.selectPage(any(), any())).thenReturn(page);
         when(appUserMapper.selectBatchIds(any())).thenReturn(List.of(user));
 
-        var result = service.pageWalletTransactions(1, 10, null, null, null, null, null, null);
+        var result = service.pageWalletTransactions(1, 10, null, null, null, null, null, null, null);
         var response = result.records().get(0);
 
         assertEquals(30L, response.id());

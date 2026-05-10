@@ -6,25 +6,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
-import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.compute.rental.common.enums.ProfitStatus;
 import com.compute.rental.common.enums.RentalOrderSettlementStatus;
 import com.compute.rental.common.enums.RentalOrderStatus;
-import com.compute.rental.common.enums.WalletBusinessType;
 import com.compute.rental.modules.order.entity.RentalOrder;
-import com.compute.rental.modules.order.entity.RentalProfitRecord;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
-import com.compute.rental.modules.order.mapper.RentalProfitRecordMapper;
 import com.compute.rental.modules.order.service.SettlementService;
-import com.compute.rental.modules.wallet.entity.WalletTransaction;
-import com.compute.rental.modules.wallet.service.WalletService;
-import java.math.BigDecimal;
+import com.compute.rental.modules.scheduler.service.RentalProfitGenerateService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import org.apache.ibatis.builder.MapperBuilderAssistant;
-import org.apache.ibatis.session.Configuration;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -38,10 +28,7 @@ class ProfitSettlementSchedulerProcessorTest {
     private RentalOrderMapper rentalOrderMapper;
 
     @Mock
-    private RentalProfitRecordMapper profitRecordMapper;
-
-    @Mock
-    private WalletService walletService;
+    private RentalProfitGenerateService profitGenerateService;
 
     @Mock
     private SettlementService settlementService;
@@ -49,85 +36,39 @@ class ProfitSettlementSchedulerProcessorTest {
     @InjectMocks
     private ProfitSettlementSchedulerProcessor processor;
 
-    @BeforeAll
-    static void initMybatisPlusTableInfo() {
-        var configuration = new Configuration();
-        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RentalOrder.class);
-        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(configuration, ""), RentalProfitRecord.class);
-    }
-
     @Test
-    void runningOrderShouldGenerateDailyProfit() {
-        var today = LocalDate.now();
-        var now = LocalDateTime.now();
-        when(rentalOrderMapper.selectById(1L)).thenReturn(runningOrder(now.minusDays(1), now.plusDays(2)));
-        when(profitRecordMapper.selectOne(any(Wrapper.class))).thenReturn(null);
-        when(profitRecordMapper.insert(any(RentalProfitRecord.class))).thenAnswer(invocation -> {
-            invocation.getArgument(0, RentalProfitRecord.class).setId(10L);
-            return 1;
-        });
-        var tx = new WalletTransaction();
-        tx.setTxNo("WT001");
-        when(walletService.creditWithIdempotencyKey(eq(10L), any(BigDecimal.class), eq(WalletBusinessType.RENT_PROFIT),
-                any(), eq("RENT_PROFIT:RO001:" + today), any())).thenReturn(tx);
-
-        processor.generateDailyProfit(1L, today, now);
-
-        verify(profitRecordMapper).insert(any(RentalProfitRecord.class));
-        verify(walletService).creditWithIdempotencyKey(eq(10L), any(BigDecimal.class),
-                eq(WalletBusinessType.RENT_PROFIT), any(), eq("RENT_PROFIT:RO001:" + today), any());
-        verify(profitRecordMapper).update(any(), any(Wrapper.class));
-    }
-
-    @Test
-    void nonRunningOrderShouldNotGenerateProfit() {
-        var now = LocalDateTime.now();
-        var order = runningOrder(now.minusDays(1), now.plusDays(2));
-        order.setOrderStatus(RentalOrderStatus.PAUSED.name());
+    void completedProfitDateShouldDelegateToProfitGenerateService() {
+        var profitDate = LocalDate.of(2026, 5, 9);
+        var now = LocalDateTime.of(2026, 5, 10, 0, 0);
+        var order = order(RentalOrderStatus.PAUSED,
+                LocalDateTime.of(2026, 5, 9, 17, 0),
+                LocalDateTime.of(2026, 5, 16, 17, 0));
         when(rentalOrderMapper.selectById(1L)).thenReturn(order);
 
-        processor.generateDailyProfit(1L, LocalDate.now(), now);
+        processor.generateDailyProfit(1L, profitDate, now);
 
-        verify(profitRecordMapper, never()).insert(any(RentalProfitRecord.class));
-        verify(walletService, never()).creditWithIdempotencyKey(any(), any(), any(), any(), any(), any());
+        verify(profitGenerateService).generateProfitForDate(order, profitDate, now);
     }
 
     @Test
-    void futureProfitStartShouldNotGenerateProfit() {
-        var now = LocalDateTime.now();
-        when(rentalOrderMapper.selectById(1L)).thenReturn(runningOrder(now.plusMinutes(1), now.plusDays(2)));
+    void unfinishedProfitDateShouldNotGenerateProfit() {
+        var profitDate = LocalDate.of(2026, 5, 9);
+        var now = LocalDateTime.of(2026, 5, 9, 23, 59);
+        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.RUNNING,
+                LocalDateTime.of(2026, 5, 9, 17, 0),
+                LocalDateTime.of(2026, 5, 16, 17, 0)));
 
-        processor.generateDailyProfit(1L, LocalDate.now(), now);
+        processor.generateDailyProfit(1L, profitDate, now);
 
-        verify(profitRecordMapper, never()).insert(any(RentalProfitRecord.class));
-    }
-
-    @Test
-    void lastDayShouldNotGenerateDailyProfit() {
-        var now = LocalDateTime.now();
-        when(rentalOrderMapper.selectById(1L)).thenReturn(runningOrder(now.minusDays(1), now));
-
-        processor.generateDailyProfit(1L, LocalDate.now(), now);
-
-        verify(profitRecordMapper, never()).insert(any(RentalProfitRecord.class));
-    }
-
-    @Test
-    void existingProfitRecordShouldNotCreditAgain() {
-        var today = LocalDate.now();
-        var now = LocalDateTime.now();
-        when(rentalOrderMapper.selectById(1L)).thenReturn(runningOrder(now.minusDays(1), now.plusDays(2)));
-        when(profitRecordMapper.selectOne(any(Wrapper.class))).thenReturn(new RentalProfitRecord());
-
-        processor.generateDailyProfit(1L, today, now);
-
-        verify(walletService, never()).creditWithIdempotencyKey(any(), any(), any(), any(), any(), any());
+        verify(profitGenerateService, never()).generateProfitForDate(any(), any(), any());
     }
 
     @Test
     void dueRunningOrderShouldExpireSettle() {
-        var now = LocalDateTime.now();
-        var order = runningOrder(now.minusDays(5), now.minusSeconds(1));
+        var now = LocalDateTime.of(2026, 5, 16, 17, 25);
+        var order = order(RentalOrderStatus.RUNNING,
+                LocalDateTime.of(2026, 5, 9, 17, 24, 55),
+                LocalDateTime.of(2026, 5, 16, 17, 24, 55));
         when(rentalOrderMapper.selectById(1L)).thenReturn(order);
 
         processor.expireSettle(1L, now);
@@ -135,19 +76,53 @@ class ProfitSettlementSchedulerProcessorTest {
         verify(settlementService).expireSettle(order);
     }
 
-    private RentalOrder runningOrder(LocalDateTime startAt, LocalDateTime endAt) {
+    @Test
+    void duePausedOrderShouldExpireSettle() {
+        var now = LocalDateTime.of(2026, 5, 16, 17, 25);
+        var order = order(RentalOrderStatus.PAUSED,
+                LocalDateTime.of(2026, 5, 9, 17, 24, 55),
+                LocalDateTime.of(2026, 5, 16, 17, 24, 55));
+        when(rentalOrderMapper.selectById(1L)).thenReturn(order);
+
+        processor.expireSettle(1L, now);
+
+        verify(settlementService).expireSettle(order);
+    }
+
+    @Test
+    void notDueOrderShouldNotExpireSettle() {
+        var now = LocalDateTime.of(2026, 5, 16, 17, 24);
+        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.RUNNING,
+                LocalDateTime.of(2026, 5, 9, 17, 24, 55),
+                LocalDateTime.of(2026, 5, 16, 17, 24, 55)));
+
+        processor.expireSettle(1L, now);
+
+        verify(settlementService, never()).expireSettle(any());
+    }
+
+    @Test
+    void nonActiveOrderShouldNotExpireSettle() {
+        var now = LocalDateTime.of(2026, 5, 16, 17, 25);
+        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.CANCELED,
+                LocalDateTime.of(2026, 5, 9, 17, 24, 55),
+                LocalDateTime.of(2026, 5, 16, 17, 24, 55)));
+
+        processor.expireSettle(1L, now);
+
+        verify(settlementService, never()).expireSettle(any());
+    }
+
+    private RentalOrder order(RentalOrderStatus status, LocalDateTime startAt, LocalDateTime endAt) {
         var order = new RentalOrder();
         order.setId(1L);
         order.setOrderNo("RO001");
         order.setUserId(10L);
-        order.setOrderStatus(RentalOrderStatus.RUNNING.name());
+        order.setOrderStatus(status.name());
         order.setProfitStatus(ProfitStatus.RUNNING.name());
         order.setSettlementStatus(RentalOrderSettlementStatus.UNSETTLED.name());
         order.setProfitStartAt(startAt);
         order.setProfitEndAt(endAt);
-        order.setTokenOutputPerDaySnapshot(1000L);
-        order.setTokenUnitPriceSnapshot(new BigDecimal("0.01000000"));
-        order.setYieldMultiplierSnapshot(new BigDecimal("1.2000"));
         return order;
     }
 }

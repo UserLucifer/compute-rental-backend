@@ -122,7 +122,6 @@ public class SystemEnumService {
             case "SUPPORT" -> "支持";
             case "LEVEL_1" -> "一级";
             case "LEVEL_2" -> "二级";
-            case "LEVEL_3" -> "三级";
             case "IOS" -> "iOS";
             case "ANDROID" -> "Android";
             case "SIGNUP" -> "注册";
@@ -200,7 +199,6 @@ public class SystemEnumService {
             case "SUPPORT" -> "Support";
             case "LEVEL_1" -> "Level 1";
             case "LEVEL_2" -> "Level 2";
-            case "LEVEL_3" -> "Level 3";
             case "IOS" -> "iOS";
             case "ANDROID" -> "Android";
             case "SIGNUP" -> "Sign up";

@@ -101,6 +101,9 @@ class RentalOrderServiceTest {
     @Mock
     private RedisLockClient redisLockClient;
 
+    @Mock
+    private RentalOrderRunSegmentService runSegmentService;
+
     @Captor
     private ArgumentCaptor<RentalOrder> rentalOrderCaptor;
 
@@ -329,6 +332,7 @@ class RentalOrderServiceTest {
         assertThat(apiDeployOrderCaptor.getValue().getStatus()).isEqualTo(ApiDeployOrderStatus.PENDING_PAY.name());
         assertThat(response.status()).isEqualTo(ApiDeployOrderStatus.PAID.name());
         assertThat(response.walletTxNo()).isEqualTo("WT001");
+        verify(runSegmentService).openSegment(any(RentalOrder.class), any());
     }
 
     @Test
@@ -396,6 +400,23 @@ class RentalOrderServiceTest {
         assertThat(response.profitStatus()).isEqualTo(ProfitStatus.RUNNING.name());
         assertThat(response.profitStartAt()).isEqualTo(profitStartAt);
         assertThat(response.profitEndAt()).isEqualTo(profitStartAt.plusDays(30));
+        verify(runSegmentService).openSegment(any(RentalOrder.class), any());
+    }
+
+    @Test
+    void expiredPausedOrderShouldNotStart() {
+        var paused = order(RentalOrderStatus.PAUSED);
+        paused.setProfitStartAt(java.time.LocalDateTime.now().minusDays(30));
+        paused.setProfitEndAt(java.time.LocalDateTime.now().minusMinutes(1));
+        when(rentalOrderMapper.selectOne(any(Wrapper.class))).thenReturn(paused);
+        when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.PAUSED));
+
+        assertThatThrownBy(() -> rentalOrderService.startOrder(10L, "RO001"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.RENTAL_ORDER_NOT_STARTABLE);
+        verify(rentalOrderMapper, never()).update(any(), any(Wrapper.class));
+        verify(runSegmentService, never()).openSegment(any(), any());
     }
 
     @Test

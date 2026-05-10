@@ -18,6 +18,12 @@ public record AdminProfitRecordResponse(
         Long rentalOrderId,
         @Schema(description = "Profit date")
         LocalDate profitDate,
+        @Schema(description = "Effective running minutes for this profit date")
+        Integer effectiveMinutes,
+        @Schema(description = "Effective profit period start time")
+        LocalDateTime periodStartAt,
+        @Schema(description = "Effective profit period end time")
+        LocalDateTime periodEndAt,
         @Schema(description = "GPU daily token snapshot")
         Long gpuDailyTokenSnapshot,
         @Schema(description = "Token price snapshot")

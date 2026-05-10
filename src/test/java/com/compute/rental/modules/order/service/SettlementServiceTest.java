@@ -16,6 +16,7 @@ import com.compute.rental.common.enums.ProfitStatus;
 import com.compute.rental.common.enums.RentalOrderSettlementStatus;
 import com.compute.rental.common.enums.RentalOrderStatus;
 import com.compute.rental.common.enums.RentalSettlementType;
+import com.compute.rental.common.enums.RunSegmentCloseReason;
 import com.compute.rental.common.enums.WalletBusinessType;
 import com.compute.rental.common.enums.WalletTransactionType;
 import com.compute.rental.common.exception.BusinessException;
@@ -27,9 +28,11 @@ import com.compute.rental.modules.order.mapper.ApiCredentialMapper;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
 import com.compute.rental.modules.order.mapper.RentalProfitRecordMapper;
 import com.compute.rental.modules.order.mapper.RentalSettlementOrderMapper;
+import com.compute.rental.modules.scheduler.service.RentalProfitGenerateService;
 import com.compute.rental.modules.wallet.entity.WalletTransaction;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.session.Configuration;
@@ -59,6 +62,12 @@ class SettlementServiceTest {
 
     @Mock
     private WalletService walletService;
+
+    @Mock
+    private RentalOrderRunSegmentService runSegmentService;
+
+    @Mock
+    private RentalProfitGenerateService profitGenerateService;
 
     @Captor
     private ArgumentCaptor<RentalSettlementOrder> settlementCaptor;
@@ -93,6 +102,8 @@ class SettlementServiceTest {
         verify(settlementOrderMapper).insert(settlementCaptor.capture());
         assertThat(settlementCaptor.getValue().getSettlementType()).isEqualTo(RentalSettlementType.EXPIRE.name());
         assertThat(settlementCaptor.getValue().getActualSettleAmount()).isEqualByComparingTo("1000.00000000");
+        verify(runSegmentService).closeOpenSegment(eq(1L), eq(order.getProfitEndAt()), eq(RunSegmentCloseReason.EXPIRE));
+        verify(profitGenerateService).generateProfitUpTo(eq(order), eq(order.getProfitEndAt()), any());
         verify(walletService).creditWithIdempotencyKey(eq(10L), any(BigDecimal.class),
                 eq(WalletBusinessType.SETTLEMENT), any(), eq("SETTLEMENT:RO001:EXPIRE"), any());
         verify(apiCredentialMapper).update(any(), any(Wrapper.class));
@@ -131,6 +142,8 @@ class SettlementServiceTest {
         verify(settlementOrderMapper).insert(settlementCaptor.capture());
         assertThat(settlementCaptor.getValue().getPenaltyAmount()).isEqualByComparingTo("10.00000000");
         assertThat(settlementCaptor.getValue().getActualSettleAmount()).isEqualByComparingTo("990.00000000");
+        verify(runSegmentService).closeOpenSegment(eq(1L), any(), eq(RunSegmentCloseReason.EARLY_SETTLE));
+        verify(profitGenerateService).generateProfitUpTo(any(RentalOrder.class), any(), any());
         verify(apiCredentialMapper).update(any(), any(Wrapper.class));
     }
 
@@ -154,6 +167,8 @@ class SettlementServiceTest {
         order.setSettlementStatus(RentalOrderSettlementStatus.UNSETTLED.name());
         order.setOrderAmount(new BigDecimal("1000.00000000"));
         order.setEarlyPenaltyRateSnapshot(new BigDecimal("0.0100"));
+        order.setProfitStartAt(LocalDateTime.now().minusDays(7));
+        order.setProfitEndAt(LocalDateTime.now().minusMinutes(1));
         return order;
     }
 

@@ -12,6 +12,7 @@ public record TeamMemberQueryRequest(
         Integer pageSize,
 
         @Min(1)
+        @Max(2)
         Integer levelDepth,
 
         String keyword

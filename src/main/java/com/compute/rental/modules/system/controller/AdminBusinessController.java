@@ -19,6 +19,7 @@ import com.compute.rental.modules.system.service.AdminBusinessQueryService;
 import com.compute.rental.modules.system.service.AdminLogService;
 import com.compute.rental.security.CurrentUser;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
@@ -52,6 +53,7 @@ public class AdminBusinessController {
     public ApiResponse<PageResult<AdminUserResponse>> users(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String email,
             @RequestParam(required = false, name = "user_id") String userId,
             @RequestParam(required = false) Integer status,
@@ -60,7 +62,7 @@ public class AdminBusinessController {
             @RequestParam(required = false, name = "end_time")
             @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime
     ) {
-        return ApiResponse.success(adminBusinessQueryService.pageUsers(pageNo, pageSize, email, userId, status,
+        return ApiResponse.success(adminBusinessQueryService.pageUsers(pageNo, pageSize, keyword, email, userId, status,
                 startTime, endTime));
     }
 
@@ -89,10 +91,12 @@ public class AdminBusinessController {
     public ApiResponse<PageResult<AdminWalletResponse>> wallets(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
+            @Parameter(description = "模糊搜索关键词，匹配用户名称或邮箱")
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false, name = "user_id") Long userId,
             @RequestParam(required = false, name = "wallet_no") String walletNo
     ) {
-        return ApiResponse.success(adminBusinessQueryService.pageWallets(pageNo, pageSize, userId, walletNo));
+        return ApiResponse.success(adminBusinessQueryService.pageWallets(pageNo, pageSize, keyword, userId, walletNo));
     }
 
     @Operation(summary = "Admin wallet by user")
@@ -106,6 +110,8 @@ public class AdminBusinessController {
     public ApiResponse<PageResult<AdminWalletTransactionResponse>> walletTransactions(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
+            @Parameter(description = "模糊搜索关键词，匹配用户名称或邮箱")
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false, name = "user_id") Long userId,
             @RequestParam(required = false, name = "wallet_no") String walletNo,
             @RequestParam(required = false, name = "tx_type") String txType,
@@ -115,8 +121,8 @@ public class AdminBusinessController {
             @RequestParam(required = false, name = "end_time")
             @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime
     ) {
-        return ApiResponse.success(adminBusinessQueryService.pageWalletTransactions(pageNo, pageSize, userId,
-                walletNo, txType, bizType, startTime, endTime));
+        return ApiResponse.success(adminBusinessQueryService.pageWalletTransactions(pageNo, pageSize, keyword,
+                userId, walletNo, txType, bizType, startTime, endTime));
     }
 
     @Operation(summary = "Admin rental orders")
@@ -195,6 +201,7 @@ public class AdminBusinessController {
     public ApiResponse<PageResult<AdminProfitRecordResponse>> profitRecords(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false, name = "user_id") Long userId,
             @RequestParam(required = false, name = "order_no") String orderNo,
             @RequestParam(required = false) String status,
@@ -205,7 +212,7 @@ public class AdminBusinessController {
             @RequestParam(required = false, name = "end_time")
             @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime
     ) {
-        return ApiResponse.success(adminBusinessQueryService.pageProfitRecords(pageNo, pageSize, userId, orderNo,
+        return ApiResponse.success(adminBusinessQueryService.pageProfitRecords(pageNo, pageSize, keyword, userId, orderNo,
                 status, profitDate, startTime, endTime));
     }
 

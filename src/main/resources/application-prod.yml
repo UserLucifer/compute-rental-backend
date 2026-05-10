@@ -16,5 +16,14 @@ knife4j:
 app:
   production:
     enforce: true
+  order:
+    # Production/live value: auto pause 24 hours after deploy fee payment.
+    auto-pause-delay: ${APP_ORDER_AUTO_PAUSE_DELAY:24h}
+  scheduler:
+    daily-profit-cron: "${APP_SCHEDULER_DAILY_PROFIT_CRON:0 0 0 * * *}"
+    order-expire-settle-cron: "${APP_SCHEDULER_ORDER_EXPIRE_SETTLE_CRON:0 * * * * *}"
+    auto-pause-cron: "${APP_SCHEDULER_AUTO_PAUSE_CRON:0 */5 * * * *}"
+    deploy-fee-timeout-cancel-cron: "${APP_SCHEDULER_DEPLOY_FEE_TIMEOUT_CANCEL_CRON:0 */10 * * * *}"
+    commission-generate-cron: "${APP_SCHEDULER_COMMISSION_GENERATE_CRON:0 */5 * * * *}"
   websocket:
     allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:}

@@ -13,6 +13,8 @@ public record AdminWalletResponse(
         Long userId,
         @Schema(description = "User name")
         String userName,
+        @Schema(description = "User email")
+        String email,
         @Schema(description = "Currency code")
         String currency,
         @Schema(description = "Available balance")

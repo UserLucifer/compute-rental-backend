@@ -33,6 +33,15 @@ public class RentalProfitRecord {
     @TableField("profit_date")
     private LocalDate profitDate;
 
+    @TableField("effective_minutes")
+    private Integer effectiveMinutes;
+
+    @TableField("period_start_at")
+    private LocalDateTime periodStartAt;
+
+    @TableField("period_end_at")
+    private LocalDateTime periodEndAt;
+
     @TableField("gpu_daily_token_snapshot")
     private Long gpuDailyTokenSnapshot;
 

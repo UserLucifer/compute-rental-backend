@@ -274,9 +274,9 @@ public class RechargeService {
                 .le(request.endTime() != null, RechargeOrder::getCreatedAt, request.endTime())
                 .orderByDesc(RechargeOrder::getId);
         var result = rechargeOrderMapper.selectPage(page, wrapper);
-        var userNames = userNameMap(result.getRecords().stream().map(RechargeOrder::getUserId).toList());
+        var userIdentities = userIdentityMap(result.getRecords().stream().map(RechargeOrder::getUserId).toList());
         return new PageResult<>(result.getRecords().stream()
-                .map(order -> toOrderResponse(order, userNames.get(order.getUserId())))
+                .map(order -> toOrderResponse(order, userIdentities.get(order.getUserId())))
                 .toList(),
                 result.getTotal(), result.getCurrent(), result.getSize());
     }
@@ -309,17 +309,22 @@ public class RechargeService {
     }
 
     public PageResult<RechargeOrderResponse> pageAdminOrders(RechargeOrderQueryRequest request) {
+        var keywordUserIds = userIdsByKeyword(request.keyword());
+        if (StringUtils.hasText(request.keyword()) && keywordUserIds.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0, request.current(), request.size());
+        }
         var page = new Page<RechargeOrder>(request.current(), request.size());
         var wrapper = baseOrderQuery()
+                .in(!keywordUserIds.isEmpty(), RechargeOrder::getUserId, keywordUserIds)
                 .eq(request.status() != null, RechargeOrder::getStatus,
                         request.status() == null ? null : request.status().name())
                 .ge(request.startTime() != null, RechargeOrder::getCreatedAt, request.startTime())
                 .le(request.endTime() != null, RechargeOrder::getCreatedAt, request.endTime())
                 .orderByDesc(RechargeOrder::getId);
         var result = rechargeOrderMapper.selectPage(page, wrapper);
-        var userNames = userNameMap(result.getRecords().stream().map(RechargeOrder::getUserId).toList());
+        var userIdentities = userIdentityMap(result.getRecords().stream().map(RechargeOrder::getUserId).toList());
         return new PageResult<>(result.getRecords().stream()
-                .map(order -> toOrderResponse(order, userNames.get(order.getUserId())))
+                .map(order -> toOrderResponse(order, userIdentities.get(order.getUserId())))
                 .toList(),
                 result.getTotal(), result.getCurrent(), result.getSize());
     }
@@ -574,13 +579,14 @@ public class RechargeService {
     }
 
     private RechargeOrderResponse toOrderResponse(RechargeOrder order) {
-        return toOrderResponse(order, userName(order.getUserId()));
+        return toOrderResponse(order, userIdentity(order.getUserId()));
     }
 
-    private RechargeOrderResponse toOrderResponse(RechargeOrder order, String userName) {
+    private RechargeOrderResponse toOrderResponse(RechargeOrder order, UserIdentity userIdentity) {
         return new RechargeOrderResponse(
                 order.getRechargeNo(),
-                userName,
+                userIdentity == null ? null : userIdentity.userName(),
+                userIdentity == null ? null : userIdentity.email(),
                 order.getChannelId(),
                 order.getCurrency(),
                 order.getChannelNameSnapshot(),
@@ -606,21 +612,37 @@ public class RechargeService {
         return trimToNull(externalTxNo);
     }
 
-    private String userName(Long userId) {
+    private UserIdentity userIdentity(Long userId) {
         var user = userId == null ? null : appUserMapper.selectById(userId);
-        return user == null ? null : user.getUserName();
+        return user == null ? null : new UserIdentity(user.getUserName(), user.getEmail());
     }
 
-    private Map<Long, String> userNameMap(List<Long> userIds) {
+    private Map<Long, UserIdentity> userIdentityMap(List<Long> userIds) {
         var ids = userIds.stream().filter(id -> id != null).distinct().toList();
         if (ids.isEmpty()) {
             return Map.of();
         }
-        var userNames = new HashMap<Long, String>();
+        var userIdentities = new HashMap<Long, UserIdentity>();
         for (var user : appUserMapper.selectBatchIds(ids)) {
-            userNames.put(user.getId(), user.getUserName());
+            userIdentities.put(user.getId(), new UserIdentity(user.getUserName(), user.getEmail()));
         }
-        return userNames;
+        return userIdentities;
+    }
+
+    private List<Long> userIdsByKeyword(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return Collections.emptyList();
+        }
+        var normalizedKeyword = keyword.trim();
+        return appUserMapper.selectList(new LambdaQueryWrapper<AppUser>()
+                        .select(AppUser::getId)
+                        .and(wrapper -> wrapper
+                                .like(AppUser::getUserName, normalizedKeyword)
+                                .or()
+                                .like(AppUser::getEmail, normalizedKeyword)))
+                .stream()
+                .map(AppUser::getId)
+                .toList();
     }
 
     private Map<Long, RechargeChannelTranslation> rechargeChannelTranslationMap(Collection<Long> ids, String locale) {
@@ -712,6 +734,9 @@ public class RechargeService {
     private String generateRechargeNo() {
         return "RC" + DateTimeUtils.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
+    }
+
+    private record UserIdentity(String userName, String email) {
     }
 
     private record LocalizedText(String value, String locale, boolean fallback) {

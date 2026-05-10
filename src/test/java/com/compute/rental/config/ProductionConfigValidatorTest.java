@@ -49,7 +49,24 @@ class ProductionConfigValidatorTest {
 
     @Test
     void shouldAcceptCompleteProductionConfiguration() {
-        var environment = new MockEnvironment()
+        var environment = completeProductionEnvironment();
+
+        assertThatCode(() -> new ProductionConfigValidator(environment).validate())
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldRejectShortAutoPauseDelayWhenProductionIsEnforced() {
+        var environment = completeProductionEnvironment()
+                .withProperty("app.order.auto-pause-delay", "5m");
+
+        assertThatThrownBy(() -> new ProductionConfigValidator(environment).validate())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Order auto pause delay must be at least 24h in production");
+    }
+
+    private MockEnvironment completeProductionEnvironment() {
+        return new MockEnvironment()
                 .withProperty("app.production.enforce", "true")
                 .withProperty("app.jwt.secret", "prod-jwt-secret-32-bytes-minimum-value")
                 .withProperty("app.api-token.encryption-secret", "prod-api-token-secret-32-bytes-value")
@@ -67,8 +84,5 @@ class ProductionConfigValidatorTest {
                 .withProperty("knife4j.enable", "false")
                 .withProperty("springdoc.api-docs.enabled", "false")
                 .withProperty("springdoc.swagger-ui.enabled", "false");
-
-        assertThatCode(() -> new ProductionConfigValidator(environment).validate())
-                .doesNotThrowAnyException();
     }
 }

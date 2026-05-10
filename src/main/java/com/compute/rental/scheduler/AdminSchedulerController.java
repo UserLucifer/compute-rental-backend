@@ -50,12 +50,18 @@ public class AdminSchedulerController {
         return ApiResponse.success(schedulerLogService.pageLogs(pageNo, pageSize, taskName));
     }
 
-    @Operation(summary = "Run activation timeout cancel scheduler")
-    @PostMapping("/activation-timeout-cancel/run")
-    public ApiResponse<SchedulerRunResult> runActivationTimeoutCancel(HttpServletRequest request) {
-        var result = rentalActivationScheduler.runActivationTimeoutCancel();
+    @Operation(summary = "Run deploy fee timeout cancel scheduler")
+    @PostMapping("/deploy-fee-timeout-cancel/run")
+    public ApiResponse<SchedulerRunResult> runDeployFeeTimeoutCancel(HttpServletRequest request) {
+        var result = rentalActivationScheduler.runDeployFeeTimeoutCancel();
         logSchedulerRun(result, request);
         return ApiResponse.success(result);
+    }
+
+    @Operation(summary = "Run deploy fee timeout cancel scheduler (legacy path)")
+    @PostMapping("/activation-timeout-cancel/run")
+    public ApiResponse<SchedulerRunResult> runActivationTimeoutCancel(HttpServletRequest request) {
+        return runDeployFeeTimeoutCancel(request);
     }
 
     @Operation(summary = "Run auto pause scheduler")

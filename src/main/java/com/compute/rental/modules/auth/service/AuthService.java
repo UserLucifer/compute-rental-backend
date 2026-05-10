@@ -47,6 +47,7 @@ public class AuthService {
     private static final String CURRENCY_USDT = "USDT";
     private static final Duration EMAIL_CODE_SEND_COOLDOWN = Duration.ofSeconds(10);
     private static final int EMAIL_CODE_MAX_VERIFY_ATTEMPTS = 5;
+    private static final int MAX_TEAM_DEPTH = 2;
 
     private final AuthProperties authProperties;
     private final VerificationCodeGenerator codeGenerator;
@@ -347,7 +348,6 @@ public class AuthService {
             relation.setParentUserId(parentReferral.getUserId());
             relation.setLevel1UserId(parentReferral.getUserId());
             relation.setLevel2UserId(parentReferral.getLevel1UserId());
-            relation.setLevel3UserId(parentReferral.getLevel2UserId());
         }
         try {
             userReferralRelationMapper.insert(relation);
@@ -365,6 +365,7 @@ public class AuthService {
 
         var ancestors = userTeamRelationMapper.selectList(new LambdaQueryWrapper<UserTeamRelation>()
                 .eq(UserTeamRelation::getDescendantUserId, parentReferral.getUserId())
+                .lt(UserTeamRelation::getLevelDepth, MAX_TEAM_DEPTH)
                 .orderByAsc(UserTeamRelation::getLevelDepth));
         for (var ancestor : ancestors) {
             insertTeamRelation(ancestor.getAncestorUserId(), userId, ancestor.getLevelDepth() + 1, now);
@@ -372,6 +373,9 @@ public class AuthService {
     }
 
     private void insertTeamRelation(Long ancestorUserId, Long descendantUserId, Integer levelDepth, java.time.LocalDateTime now) {
+        if (levelDepth == null || levelDepth > MAX_TEAM_DEPTH) {
+            return;
+        }
         var teamRelation = new UserTeamRelation();
         teamRelation.setAncestorUserId(ancestorUserId);
         teamRelation.setDescendantUserId(descendantUserId);

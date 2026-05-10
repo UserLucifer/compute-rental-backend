@@ -6,6 +6,7 @@ import com.compute.rental.common.enums.ApiTokenStatus;
 import com.compute.rental.common.enums.ErrorCode;
 import com.compute.rental.common.enums.ProfitStatus;
 import com.compute.rental.common.enums.RentalOrderStatus;
+import com.compute.rental.common.enums.RunSegmentCloseReason;
 import com.compute.rental.common.enums.WalletBusinessType;
 import com.compute.rental.common.exception.BusinessException;
 import com.compute.rental.common.util.DateTimeUtils;
@@ -13,6 +14,7 @@ import com.compute.rental.modules.order.entity.ApiCredential;
 import com.compute.rental.modules.order.entity.RentalOrder;
 import com.compute.rental.modules.order.mapper.ApiCredentialMapper;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
+import com.compute.rental.modules.order.service.RentalOrderRunSegmentService;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
@@ -22,24 +24,27 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RentalActivationSchedulerProcessor {
 
-    private static final String ACTIVATION_TIMEOUT_ACTION = "ACTIVATION_TIMEOUT";
+    private static final String DEPLOY_FEE_TIMEOUT_ACTION = "DEPLOY_FEE_TIMEOUT";
 
     private final RentalOrderMapper rentalOrderMapper;
     private final ApiCredentialMapper apiCredentialMapper;
     private final WalletService walletService;
+    private final RentalOrderRunSegmentService runSegmentService;
 
     public RentalActivationSchedulerProcessor(
             RentalOrderMapper rentalOrderMapper,
             ApiCredentialMapper apiCredentialMapper,
-            WalletService walletService
+            WalletService walletService,
+            RentalOrderRunSegmentService runSegmentService
     ) {
         this.rentalOrderMapper = rentalOrderMapper;
         this.apiCredentialMapper = apiCredentialMapper;
         this.walletService = walletService;
+        this.runSegmentService = runSegmentService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void cancelActivationTimeout(Long orderId, LocalDateTime cutoffTime) {
+    public void cancelDeployFeeTimeout(Long orderId, LocalDateTime cutoffTime) {
         var order = rentalOrderMapper.selectById(orderId);
         if (order == null || !RentalOrderStatus.PENDING_ACTIVATION.name().equals(order.getOrderStatus())
                 || order.getApiGeneratedAt() == null || order.getApiGeneratedAt().isAfter(cutoffTime)) {
@@ -60,8 +65,8 @@ public class RentalActivationSchedulerProcessor {
                 order.getOrderAmount(),
                 WalletBusinessType.REFUND,
                 order.getOrderNo(),
-                ACTIVATION_TIMEOUT_ACTION,
-                "激活超时退款"
+                DEPLOY_FEE_TIMEOUT_ACTION,
+                "部署费超时未支付退款"
         );
         apiCredentialMapper.update(null, new LambdaUpdateWrapper<ApiCredential>()
                 .eq(ApiCredential::getRentalOrderId, order.getId())
@@ -94,6 +99,9 @@ public class RentalActivationSchedulerProcessor {
                 .set(RentalOrder::getUpdatedAt, now));
         if (updatedOrder == 0) {
             throw new BusinessException(ErrorCode.CONCURRENT_UPDATE_FAILED, "租赁订单状态已变化");
+        }
+        if (RentalOrderStatus.RUNNING.name().equals(order.getOrderStatus())) {
+            runSegmentService.closeOpenSegment(order.getId(), now, RunSegmentCloseReason.AUTO_PAUSE);
         }
         var updatedCredential = apiCredentialMapper.update(null, new LambdaUpdateWrapper<ApiCredential>()
                 .eq(ApiCredential::getId, credential.getId())

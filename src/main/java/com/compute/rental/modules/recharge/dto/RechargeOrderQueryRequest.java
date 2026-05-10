@@ -16,6 +16,8 @@ public record RechargeOrderQueryRequest(
 
         RechargeOrderStatus status,
 
+        String keyword,
+
         @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         LocalDateTime startTime,
 
