@@ -35,13 +35,8 @@ public interface UserTeamRelationMapper extends BaseMapper<UserTeamRelation> {
             </if>
             <if test="keyword != null and keyword != ''">
               AND (
-                team_user.user_id = #{keyword}
-                OR team_user.email = #{keyword}
-                OR team_user.user_name LIKE CONCAT(#{keyword}, '%')
+                team_user.user_name LIKE CONCAT(#{keyword}, '%')
                 OR team_user.email LIKE CONCAT(#{keyword}, '%')
-                <if test="internalUserId != null">
-                  OR team_user.id = #{internalUserId}
-                </if>
               )
             </if>
             </script>
@@ -49,7 +44,6 @@ public interface UserTeamRelationMapper extends BaseMapper<UserTeamRelation> {
     long countAdminTeamAggregates(
             @Param("maxLevel") int maxLevel,
             @Param("keyword") String keyword,
-            @Param("internalUserId") Long internalUserId,
             @Param("status") Integer status
     );
 
@@ -113,13 +107,8 @@ public interface UserTeamRelationMapper extends BaseMapper<UserTeamRelation> {
             </if>
             <if test="keyword != null and keyword != ''">
               AND (
-                team_user.user_id = #{keyword}
-                OR team_user.email = #{keyword}
-                OR team_user.user_name LIKE CONCAT(#{keyword}, '%')
+                team_user.user_name LIKE CONCAT(#{keyword}, '%')
                 OR team_user.email LIKE CONCAT(#{keyword}, '%')
-                <if test="internalUserId != null">
-                  OR team_user.id = #{internalUserId}
-                </if>
               )
             </if>
             ORDER BY
@@ -143,7 +132,6 @@ public interface UserTeamRelationMapper extends BaseMapper<UserTeamRelation> {
     List<AdminTeamAggregateRow> selectAdminTeamAggregatePage(
             @Param("maxLevel") int maxLevel,
             @Param("keyword") String keyword,
-            @Param("internalUserId") Long internalUserId,
             @Param("status") Integer status,
             @Param("yesterdayStart") LocalDateTime yesterdayStart,
             @Param("todayStart") LocalDateTime todayStart,

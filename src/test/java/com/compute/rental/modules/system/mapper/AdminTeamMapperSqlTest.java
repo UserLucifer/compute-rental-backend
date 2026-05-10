@@ -19,7 +19,6 @@ class AdminTeamMapperSqlTest {
         var parameters = new HashMap<String, Object>();
         parameters.put("maxLevel", 2);
         parameters.put("keyword", "alice");
-        parameters.put("internalUserId", null);
         parameters.put("status", 1);
         parameters.put("yesterdayStart", LocalDateTime.now().minusDays(1));
         parameters.put("todayStart", LocalDateTime.now());
@@ -36,8 +35,12 @@ class AdminTeamMapperSqlTest {
 
         assertThat(boundSql.getSql())
                 .contains("FROM user_team_relation")
+                .contains("team_user.user_name LIKE")
+                .contains("team_user.email LIKE")
                 .contains("ORDER BY")
                 .contains("LIMIT ? OFFSET ?")
+                .doesNotContain("team_user.user_id =")
+                .doesNotContain("OR team_user.id =")
                 .doesNotContain("&lt;");
     }
 

@@ -215,11 +215,10 @@ class AdminBusinessQueryServiceTest {
 
     @Test
     void teamListUsesSqlAggregatePagination() {
-        when(teamRelationMapper.countAdminTeamAggregates(eq(2), eq("alice"), isNull(), eq(1))).thenReturn(1L);
+        when(teamRelationMapper.countAdminTeamAggregates(eq(2), eq("alice"), eq(1))).thenReturn(1L);
         when(teamRelationMapper.selectAdminTeamAggregatePage(
                 eq(2),
                 eq("alice"),
-                isNull(),
                 eq(1),
                 any(),
                 any(),
@@ -240,10 +239,9 @@ class AdminBusinessQueryServiceTest {
 
     @Test
     void teamLeaderboardUsesSqlAggregatePaginationAndRankOffset() {
-        when(teamRelationMapper.countAdminTeamAggregates(eq(2), isNull(), isNull(), isNull())).thenReturn(3L);
+        when(teamRelationMapper.countAdminTeamAggregates(eq(2), isNull(), isNull())).thenReturn(3L);
         when(teamRelationMapper.selectAdminTeamAggregatePage(
                 eq(2),
-                isNull(),
                 isNull(),
                 isNull(),
                 any(),

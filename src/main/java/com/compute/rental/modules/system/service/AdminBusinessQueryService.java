@@ -541,16 +541,14 @@ public class AdminBusinessQueryService {
         var current = normalizePageNo(pageNo);
         var size = normalizePageSize(pageSize, 100);
         var normalizedKeyword = AppUserSearchSupport.normalize(keyword);
-        var internalUserId = parseLong(normalizedKeyword);
         var total = teamRelationMapper.countAdminTeamAggregates(MAX_HIERARCHY_LEVEL, normalizedKeyword,
-                internalUserId, status);
+                status);
         if (total == 0) {
             return new PageResult<>(Collections.emptyList(), 0, current, size);
         }
         var rows = teamRelationMapper.selectAdminTeamAggregatePage(
                 MAX_HIERARCHY_LEVEL,
                 normalizedKeyword,
-                internalUserId,
                 status,
                 yesterdayStart(),
                 todayStart(),
@@ -573,14 +571,13 @@ public class AdminBusinessQueryService {
     ) {
         var current = normalizePageNo(pageNo);
         var size = normalizePageSize(pageSize, 100);
-        var total = teamRelationMapper.countAdminTeamAggregates(MAX_HIERARCHY_LEVEL, null, null, null);
+        var total = teamRelationMapper.countAdminTeamAggregates(MAX_HIERARCHY_LEVEL, null, null);
         if (total == 0) {
             return new PageResult<>(Collections.emptyList(), 0, current, size);
         }
         var offset = pageOffset(current, size);
         var rows = teamRelationMapper.selectAdminTeamAggregatePage(
                 MAX_HIERARCHY_LEVEL,
-                null,
                 null,
                 null,
                 yesterdayStart(),
@@ -915,30 +912,10 @@ public class AdminBusinessQueryService {
         if (!AppUserSearchSupport.hasText(normalized)) {
             return Collections.emptyList();
         }
-        var internalId = parseLong(normalized);
         var wrapper = new LambdaQueryWrapper<AppUser>()
                 .select(AppUser::getId)
-                .and(userWrapper -> {
-                    userWrapper.eq(AppUser::getUserId, normalized)
-                            .or()
-                            .eq(AppUser::getEmail, normalized)
-                            .or()
-                            .likeRight(AppUser::getUserName, normalized)
-                            .or()
-                            .likeRight(AppUser::getEmail, normalized);
-                    if (internalId != null) {
-                        userWrapper.or().eq(AppUser::getId, internalId);
-                    }
-                });
+                .and(userWrapper -> AppUserSearchSupport.applyKeyword(userWrapper, normalized));
         return appUserMapper.selectList(wrapper).stream().map(AppUser::getId).toList();
-    }
-
-    private Long parseLong(String value) {
-        try {
-            return Long.valueOf(value);
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
     }
 
     private LocalDateTime yesterdayStart() {

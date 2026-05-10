@@ -29,10 +29,6 @@ public final class AppUserSearchSupport {
     ) {
         var normalized = normalize(keyword);
         return wrapper
-                .eq(AppUser::getUserId, normalized)
-                .or()
-                .eq(AppUser::getEmail, normalized)
-                .or()
                 .likeRight(AppUser::getUserName, normalized)
                 .or()
                 .likeRight(AppUser::getEmail, normalized);
