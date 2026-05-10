@@ -215,6 +215,8 @@ public class NotificationService {
     @Transactional
     public void cancel(Long id) {
         requireNotification(id);
+        notificationTranslationMapper.delete(new LambdaQueryWrapper<SysNotificationTranslation>()
+                .eq(SysNotificationTranslation::getNotificationId, id));
         notificationMapper.deleteById(id);
     }
 

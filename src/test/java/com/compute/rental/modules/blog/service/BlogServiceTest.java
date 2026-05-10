@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -207,6 +208,20 @@ class BlogServiceTest {
         verify(postTranslationMapper).insert(any(BlogPostTranslation.class));
         verify(adminLogService).log(eq(1L), eq("UPDATE_BLOG_POST_TRANSLATION"), eq("blog_post"), eq(9L),
                 isNull(), isNull(), eq("en-US"), eq("127.0.0.1"));
+    }
+
+    @Test
+    void deletePostShouldDeleteTranslationsBeforePost() {
+        when(postMapper.selectById(9L)).thenReturn(post(BlogPublishStatus.OFFLINE.value()));
+
+        blogService.deletePost(9L, 1L, "127.0.0.1");
+
+        var inOrder = inOrder(postTagMapper, postTranslationMapper, postMapper);
+        inOrder.verify(postTagMapper).delete(any());
+        inOrder.verify(postTranslationMapper).delete(any());
+        inOrder.verify(postMapper).deleteById(9L);
+        verify(adminLogService).log(eq(1L), eq("DELETE_BLOG_POST"), eq("blog_post"), eq(9L),
+                isNull(), isNull(), eq("deleted"), eq("127.0.0.1"));
     }
 
     private BlogPost post(Integer status) {

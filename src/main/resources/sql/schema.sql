@@ -116,6 +116,8 @@ CREATE TABLE `wallet_transaction` (
   UNIQUE KEY `uk_idempotency_key` (`idempotency_key`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_wallet_id` (`wallet_id`),
+  KEY `idx_user_tx_no_id` (`user_id`, `tx_no`, `id`),
+  KEY `idx_user_biz_order_no_id` (`user_id`, `biz_order_no`, `id`),
   KEY `idx_biz` (`biz_type`, `biz_order_no`),
   KEY `idx_created_at` (`created_at`),
   KEY `idx_tx_type` (`tx_type`),
@@ -405,6 +407,8 @@ CREATE TABLE `rental_order` (
   UNIQUE KEY `uk_order_no` (`order_no`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_user_status_id` (`user_id`, `order_status`, `id`),
+  KEY `idx_user_product_snapshot_id` (`user_id`, `product_name_snapshot`, `id`),
+  KEY `idx_user_ai_model_snapshot_id` (`user_id`, `ai_model_name_snapshot`, `id`),
   KEY `idx_product_id` (`product_id`),
   KEY `idx_ai_model_id` (`ai_model_id`),
   KEY `idx_cycle_rule_id` (`cycle_rule_id`),
@@ -529,6 +533,7 @@ CREATE TABLE `rental_profit_record` (
   UNIQUE KEY `uk_profit_no` (`profit_no`),
   UNIQUE KEY `uk_order_profit_date` (`rental_order_id`, `profit_date`) COMMENT '防重复入账，定时任务用INSERT IGNORE或捕获唯一键冲突',
   KEY `idx_user_date` (`user_id`, `profit_date`),
+  KEY `idx_user_status_profit_date` (`user_id`, `status`, `profit_date`),
   KEY `idx_status` (`status`),
   KEY `idx_status_profit_date` (`status`, `profit_date`),
   KEY `idx_status_profit_date_amount` (`status`, `profit_date`, `final_profit_amount`),
@@ -675,6 +680,7 @@ CREATE TABLE `sys_notification` (
   UNIQUE KEY `uk_user_biz` (`user_id`, `biz_type`, `biz_id`) COMMENT '防重复通知',
   KEY `idx_user_read` (`user_id`, `read_status`),
   KEY `idx_user_created` (`user_id`, `created_at`),
+  KEY `idx_user_title_id` (`user_id`, `title`, `id`),
   KEY `idx_biz` (`biz_type`, `biz_id`),
   CONSTRAINT `fk_notification_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户站内信通知表';
@@ -867,6 +873,7 @@ CREATE TABLE `doc_article` (
   UNIQUE KEY `uk_published_home_language_section` (`published_home_language_section`),
   KEY `idx_language_section_category_status_sort` (`language`, `section`, `category_id`, `publish_status`, `sort_no`),
   KEY `idx_language_section_home_status` (`language`, `section`, `is_section_home`, `publish_status`),
+  KEY `idx_language_status_title_id` (`language`, `publish_status`, `title`, `id`),
   KEY `idx_publish_status` (`publish_status`),
   KEY `idx_published_at` (`published_at`),
   CONSTRAINT `fk_doc_article_category` FOREIGN KEY (`category_id`) REFERENCES `doc_category` (`id`)

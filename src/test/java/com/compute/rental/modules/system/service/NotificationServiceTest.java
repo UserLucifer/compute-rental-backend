@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -177,6 +178,17 @@ class NotificationServiceTest {
         assertThat(result.userId()).isEqualTo(10L);
         assertThat(result.title()).isEqualTo("title");
         assertThat(result.readStatus()).isEqualTo(ReadStatus.UNREAD.value());
+    }
+
+    @Test
+    void cancelShouldDeleteTranslationsBeforeNotification() {
+        when(notificationMapper.selectById(1L)).thenReturn(notification(1L, 10L, ReadStatus.UNREAD.value()));
+
+        notificationService.cancel(1L);
+
+        var inOrder = inOrder(notificationTranslationMapper, notificationMapper);
+        inOrder.verify(notificationTranslationMapper).delete(any());
+        inOrder.verify(notificationMapper).deleteById(1L);
     }
 
     private SysNotification notification(Long id, Long userId, Integer readStatus) {

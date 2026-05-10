@@ -11,6 +11,9 @@ import com.compute.rental.common.util.MoneyUtils;
 import com.compute.rental.modules.order.dto.ProfitRecordQueryRequest;
 import com.compute.rental.modules.order.dto.ProfitRecordResponse;
 import com.compute.rental.modules.order.dto.ProfitSummaryResponse;
+import com.compute.rental.modules.order.dto.ProfitTrendGroupBy;
+import com.compute.rental.modules.order.dto.ProfitTrendRecordResponse;
+import com.compute.rental.modules.order.dto.ProfitTrendResponse;
 import com.compute.rental.modules.order.entity.RentalOrder;
 import com.compute.rental.modules.order.entity.RentalProfitRecord;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
@@ -19,7 +22,6 @@ import com.compute.rental.modules.wallet.entity.UserWallet;
 import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -73,16 +75,39 @@ public class ProfitService {
         var today = DateTimeUtils.today();
         var yesterday = today.minusDays(1);
         var monthStart = today.withDayOfMonth(1);
-        var settledRecords = rentalProfitRecordMapper.selectList(new LambdaQueryWrapper<RentalProfitRecord>()
-                .eq(RentalProfitRecord::getUserId, userId)
-                .eq(RentalProfitRecord::getStatus, RecordSettleStatus.SETTLED.name()));
+        var aggregate = rentalProfitRecordMapper.userSummaryAggregate(
+                userId,
+                RecordSettleStatus.SETTLED.name(),
+                today,
+                yesterday,
+                monthStart);
         return new ProfitSummaryResponse(
                 walletTotalProfit(userId),
-                sumByDate(settledRecords, today),
-                sumByDate(settledRecords, yesterday),
-                sumFromDate(settledRecords, monthStart),
-                (long) settledRecords.size()
+                MoneyUtils.scale(aggregate == null ? null : aggregate.getTodayProfit()),
+                MoneyUtils.scale(aggregate == null ? null : aggregate.getYesterdayProfit()),
+                MoneyUtils.scale(aggregate == null ? null : aggregate.getCurrentMonthProfit()),
+                aggregate == null || aggregate.getSettledProfitCount() == null ? 0L : aggregate.getSettledProfitCount()
         );
+    }
+
+    public ProfitTrendResponse trend(Long userId, LocalDate startDate, LocalDate endDate, ProfitTrendGroupBy groupBy) {
+        if (startDate == null || endDate == null || groupBy == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "startDate、endDate、groupBy 不能为空");
+        }
+        if (startDate.isAfter(endDate)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "startDate 不能晚于 endDate");
+        }
+        var rows = rentalProfitRecordMapper.userTrendByDate(
+                userId,
+                RecordSettleStatus.SETTLED.name(),
+                startDate,
+                endDate);
+        return new ProfitTrendResponse(rows.stream()
+                .map(row -> new ProfitTrendRecordResponse(
+                        row.getProfitDate(),
+                        MoneyUtils.scale(row.getFinalProfitAmount()),
+                        row.getRecordCount() == null ? 0L : row.getRecordCount()))
+                .toList());
     }
 
     private Long resolveOrderId(Long userId, ProfitRecordQueryRequest request) {
@@ -104,20 +129,6 @@ public class ProfitService {
                 .eq(UserWallet::getUserId, userId)
                 .last("LIMIT 1"));
         return wallet == null ? MoneyUtils.ZERO : MoneyUtils.scale(wallet.getTotalProfit());
-    }
-
-    private BigDecimal sumByDate(List<RentalProfitRecord> records, LocalDate date) {
-        return MoneyUtils.scale(records.stream()
-                .filter(record -> date.equals(record.getProfitDate()))
-                .map(RentalProfitRecord::getFinalProfitAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-    }
-
-    private BigDecimal sumFromDate(List<RentalProfitRecord> records, LocalDate startDate) {
-        return MoneyUtils.scale(records.stream()
-                .filter(record -> !record.getProfitDate().isBefore(startDate))
-                .map(RentalProfitRecord::getFinalProfitAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
     private ProfitRecordResponse toResponse(RentalProfitRecord record) {

@@ -417,6 +417,8 @@ public class BlogService {
     public void deletePost(Long id, Long adminId, String ip) {
         requirePost(id);
         postTagMapper.delete(new LambdaQueryWrapper<BlogPostTag>().eq(BlogPostTag::getPostId, id));
+        postTranslationMapper.delete(new LambdaQueryWrapper<BlogPostTranslation>()
+                .eq(BlogPostTranslation::getPostId, id));
         postMapper.deleteById(id);
         log(adminId, "DELETE_BLOG_POST", "blog_post", id, "deleted", ip);
     }

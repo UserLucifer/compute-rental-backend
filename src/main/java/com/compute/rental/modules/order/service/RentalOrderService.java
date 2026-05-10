@@ -146,6 +146,26 @@ public class RentalOrderService {
                 result.getTotal(), result.getCurrent(), result.getSize());
     }
 
+    public Long countUserOrdersByStatus(Long userId, RentalOrderStatus status) {
+        return rentalOrderMapper.selectCount(new LambdaQueryWrapper<RentalOrder>()
+                .eq(RentalOrder::getUserId, userId)
+                .eq(RentalOrder::getOrderStatus, status.name()));
+    }
+
+    public List<RentalOrderSummaryResponse> recentUserOrders(Long userId, int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
+        var page = new Page<RentalOrder>(1, limit, false);
+        var result = rentalOrderMapper.selectPage(page, new LambdaQueryWrapper<RentalOrder>()
+                .eq(RentalOrder::getUserId, userId)
+                .orderByDesc(RentalOrder::getId));
+        var userNames = userNameMap(result.getRecords().stream().map(RentalOrder::getUserId).toList());
+        return result.getRecords().stream()
+                .map(order -> toSummaryResponse(order, userNames.get(order.getUserId())))
+                .toList();
+    }
+
     public PageResult<ApiDeployInfoResponse> pageUserApiManagement(Long userId, PageParam request) {
         var page = new Page<ApiCredential>(request.current(), request.size());
         var wrapper = new LambdaQueryWrapper<ApiCredential>()
