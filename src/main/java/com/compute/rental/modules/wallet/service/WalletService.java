@@ -150,6 +150,19 @@ public class WalletService {
     }
 
     @Transactional
+    public WalletTransaction debitWithIdempotencyKey(
+            Long userId,
+            BigDecimal amount,
+            WalletBusinessType bizType,
+            String bizOrderNo,
+            String idempotencyKey,
+            String remark
+    ) {
+        return change(userId, amount, WalletTransactionType.OUT, WalletChangeAction.OUT, bizType, bizOrderNo,
+                null, idempotencyKey, null, remark);
+    }
+
+    @Transactional
     public WalletTransaction freeze(
             Long userId,
             BigDecimal amount,

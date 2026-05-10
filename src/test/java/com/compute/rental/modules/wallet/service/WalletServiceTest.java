@@ -157,6 +157,24 @@ class WalletServiceTest {
     }
 
     @Test
+    void debitWithIdempotencyKeyShouldUseExplicitKey() {
+        when(walletTransactionMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(userWalletMapper.selectOne(any(Wrapper.class))).thenReturn(wallet());
+        when(userWalletMapper.update(isNull(), any(Wrapper.class))).thenReturn(1);
+        when(walletTransactionMapper.insert(any(WalletTransaction.class))).thenReturn(1);
+
+        walletService.debitWithIdempotencyKey(1L, new BigDecimal("30.00000000"),
+                WalletBusinessType.ADJUST, "ADJ001", "ADJUST:ADJ001", "manual correction");
+
+        verify(walletTransactionMapper).insert(transactionCaptor.capture());
+        var inserted = transactionCaptor.getValue();
+        assertThat(inserted.getIdempotencyKey()).isEqualTo("ADJUST:ADJ001");
+        assertThat(inserted.getBizType()).isEqualTo(WalletBusinessType.ADJUST.name());
+        assertThat(inserted.getBizOrderNo()).isEqualTo("ADJ001");
+        assertThat(inserted.getTxType()).isEqualTo(WalletTransactionType.OUT.name());
+    }
+
+    @Test
     void freezeShouldMoveAvailableToFrozen() {
         when(walletTransactionMapper.selectOne(any(Wrapper.class))).thenReturn(null);
         when(userWalletMapper.selectOne(any(Wrapper.class))).thenReturn(wallet());
