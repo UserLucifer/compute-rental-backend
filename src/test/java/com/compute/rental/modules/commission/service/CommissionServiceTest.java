@@ -213,6 +213,32 @@ class CommissionServiceTest {
         assertThat(result.records().get(0).userName()).isEqualTo("alice");
     }
 
+    @Test
+    void summaryShouldUseAggregateQueries() {
+        var status = RecordSettleStatus.SETTLED.name();
+        when(commissionRecordMapper.sumUserCommissionAmount(10L, status, 2))
+                .thenReturn(new BigDecimal("100.00000000"));
+        when(commissionRecordMapper.sumUserCommissionAmountBySettledAtRange(eq(10L), eq(status), eq(2), any(), any()))
+                .thenReturn(new BigDecimal("10.00000000"))
+                .thenReturn(new BigDecimal("8.00000000"));
+        when(commissionRecordMapper.sumUserCommissionAmountSince(eq(10L), eq(status), eq(2), any()))
+                .thenReturn(new BigDecimal("60.00000000"));
+        when(commissionRecordMapper.sumUserCommissionAmountByLevel(10L, status, 1))
+                .thenReturn(new BigDecimal("70.00000000"));
+        when(commissionRecordMapper.sumUserCommissionAmountByLevel(10L, status, 2))
+                .thenReturn(new BigDecimal("30.00000000"));
+
+        var result = commissionService.summary(10L);
+
+        assertThat(result.totalCommission()).isEqualByComparingTo("100.00000000");
+        assertThat(result.todayCommission()).isEqualByComparingTo("10.00000000");
+        assertThat(result.yesterdayCommission()).isEqualByComparingTo("8.00000000");
+        assertThat(result.currentMonthCommission()).isEqualByComparingTo("60.00000000");
+        assertThat(result.level1Commission()).isEqualByComparingTo("70.00000000");
+        assertThat(result.level2Commission()).isEqualByComparingTo("30.00000000");
+        verify(commissionRecordMapper, never()).selectList(any(Wrapper.class));
+    }
+
     private RentalProfitRecord settledProfit(Long id, Long userId, BigDecimal amount) {
         var profit = new RentalProfitRecord();
         profit.setId(id);

@@ -1,7 +1,6 @@
 package com.compute.rental.scheduler;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.compute.rental.common.enums.RentalOrderStatus;
 import com.compute.rental.common.enums.SchedulerLogStatus;
 import com.compute.rental.common.util.DateTimeUtils;
@@ -118,14 +117,17 @@ public class ProfitSettlementScheduler {
         var failCount = 0;
         var totalCount = 0;
         var errors = new ArrayList<String>();
-        var current = 1L;
-        Page<RentalOrder> result;
+        var lastOrderId = 0L;
+        java.util.List<RentalOrder> orders;
         do {
-            result = rentalOrderMapper.selectPage(new Page<>(current, PAGE_SIZE), new LambdaQueryWrapper<RentalOrder>()
+            orders = rentalOrderMapper.selectList(new LambdaQueryWrapper<RentalOrder>()
+                    .gt(RentalOrder::getId, lastOrderId)
                     .in(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name(), RentalOrderStatus.PAUSED.name())
                     .le(RentalOrder::getProfitEndAt, now)
-                    .orderByAsc(RentalOrder::getId));
-            for (var order : result.getRecords()) {
+                    .orderByAsc(RentalOrder::getId)
+                    .last("LIMIT " + PAGE_SIZE));
+            for (var order : orders) {
+                lastOrderId = order.getId();
                 totalCount++;
                 try {
                     processor.expireSettle(order.getId(), now);
@@ -136,8 +138,7 @@ public class ProfitSettlementScheduler {
                     log.warn("Expire settlement failed, orderNo={}", order.getOrderNo(), ex);
                 }
             }
-            current++;
-        } while (result.hasNext());
+        } while (orders.size() == PAGE_SIZE);
         var errorMessage = errors.isEmpty() ? null : String.join("; ", errors);
         schedulerLogService.finish(schedulerLog, totalCount, successCount, failCount, errorMessage);
         return result(taskName, totalCount, successCount, failCount, errorMessage);

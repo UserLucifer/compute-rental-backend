@@ -4466,6 +4466,45 @@ ON DUPLICATE KEY UPDATE
   `sort_no` = VALUES(`sort_no`),
   `updated_at` = NOW();
 
+-- Backfill historical running segments for minute-based profit settlement.
+-- Schema definition is kept in schema.sql; this DML preserves the data migration
+-- from the previous standalone run segment migration.
+INSERT INTO `rental_order_run_segment` (
+  `rental_order_id`,
+  `user_id`,
+  `segment_start_at`,
+  `segment_end_at`,
+  `close_reason`,
+  `created_at`,
+  `updated_at`
+)
+SELECT
+  ro.`id`,
+  ro.`user_id`,
+  ro.`profit_start_at`,
+  CASE
+    WHEN ro.`order_status` = 'RUNNING' THEN NULL
+    WHEN ro.`profit_end_at` IS NULL THEN COALESCE(ro.`paused_at`, ro.`updated_at`, ro.`profit_start_at`)
+    ELSE LEAST(COALESCE(ro.`paused_at`, ro.`updated_at`, ro.`profit_start_at`), ro.`profit_end_at`)
+  END,
+  CASE
+    WHEN ro.`order_status` = 'RUNNING' THEN NULL
+    ELSE 'AUTO_PAUSE'
+  END,
+  ro.`profit_start_at`,
+  CASE
+    WHEN ro.`order_status` = 'RUNNING' THEN ro.`profit_start_at`
+    WHEN ro.`profit_end_at` IS NULL THEN COALESCE(ro.`paused_at`, ro.`updated_at`, ro.`profit_start_at`)
+    ELSE LEAST(COALESCE(ro.`paused_at`, ro.`updated_at`, ro.`profit_start_at`), ro.`profit_end_at`)
+  END
+FROM `rental_order` ro
+WHERE ro.`profit_start_at` IS NOT NULL
+  AND ro.`order_status` IN ('RUNNING', 'PAUSED')
+  AND NOT EXISTS (
+    SELECT 1
+    FROM `rental_order_run_segment` existing_segment
+    WHERE existing_segment.`rental_order_id` = ro.`id`
+  );
 
 
 

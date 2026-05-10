@@ -27,8 +27,6 @@ import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.user.mapper.UserReferralRelationMapper;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -146,20 +144,22 @@ public class CommissionService {
     }
 
     public CommissionSummaryResponse summary(Long userId) {
-        var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
-                .eq(CommissionRecord::getBenefitUserId, userId)
-                .le(CommissionRecord::getLevelNo, MAX_COMMISSION_LEVEL)
-                .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name()));
         var today = DateTimeUtils.today();
         var yesterday = today.minusDays(1);
         var monthStart = today.withDayOfMonth(1);
+        var status = RecordSettleStatus.SETTLED.name();
         return new CommissionSummaryResponse(
-                sumTotal(records),
-                sumByDate(records, today),
-                sumByDate(records, yesterday),
-                sumFromDate(records, monthStart),
-                sumByLevel(records, 1),
-                sumByLevel(records, 2)
+                MoneyUtils.scale(commissionRecordMapper.sumUserCommissionAmount(userId, status, MAX_COMMISSION_LEVEL)),
+                MoneyUtils.scale(commissionRecordMapper.sumUserCommissionAmountBySettledAtRange(
+                        userId, status, MAX_COMMISSION_LEVEL, today.atStartOfDay(),
+                        today.plusDays(1).atStartOfDay())),
+                MoneyUtils.scale(commissionRecordMapper.sumUserCommissionAmountBySettledAtRange(
+                        userId, status, MAX_COMMISSION_LEVEL, yesterday.atStartOfDay(),
+                        today.atStartOfDay())),
+                MoneyUtils.scale(commissionRecordMapper.sumUserCommissionAmountSince(
+                        userId, status, MAX_COMMISSION_LEVEL, monthStart.atStartOfDay())),
+                MoneyUtils.scale(commissionRecordMapper.sumUserCommissionAmountByLevel(userId, status, 1)),
+                MoneyUtils.scale(commissionRecordMapper.sumUserCommissionAmountByLevel(userId, status, 2))
         );
     }
 
@@ -250,33 +250,6 @@ public class CommissionService {
                 .eq(RentalProfitRecord::getCommissionGenerated, 0)
                 .set(RentalProfitRecord::getCommissionGenerated, 1)
                 .set(RentalProfitRecord::getUpdatedAt, DateTimeUtils.now()));
-    }
-
-    private BigDecimal sumTotal(List<CommissionRecord> records) {
-        return MoneyUtils.scale(records.stream()
-                .map(CommissionRecord::getCommissionAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-    }
-
-    private BigDecimal sumByDate(List<CommissionRecord> records, LocalDate date) {
-        return MoneyUtils.scale(records.stream()
-                .filter(record -> record.getSettledAt() != null && date.equals(record.getSettledAt().toLocalDate()))
-                .map(CommissionRecord::getCommissionAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-    }
-
-    private BigDecimal sumFromDate(List<CommissionRecord> records, LocalDate startDate) {
-        return MoneyUtils.scale(records.stream()
-                .filter(record -> record.getSettledAt() != null && !record.getSettledAt().toLocalDate().isBefore(startDate))
-                .map(CommissionRecord::getCommissionAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-    }
-
-    private BigDecimal sumByLevel(List<CommissionRecord> records, int levelNo) {
-        return MoneyUtils.scale(records.stream()
-                .filter(record -> Integer.valueOf(levelNo).equals(record.getLevelNo()))
-                .map(CommissionRecord::getCommissionAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
     private CommissionRecordResponse toResponse(CommissionRecord record) {

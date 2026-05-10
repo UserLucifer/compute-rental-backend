@@ -30,4 +30,62 @@ public interface CommissionRecordMapper extends BaseMapper<CommissionRecord> {
             @Param("startAt") LocalDateTime startAt,
             @Param("endAt") LocalDateTime endAt
     );
+
+    @Select("""
+            SELECT COALESCE(SUM(commission_amount), 0)
+            FROM commission_record
+            WHERE benefit_user_id = #{benefitUserId}
+              AND status = #{status}
+              AND level_no <= #{maxLevelNo}
+            """)
+    BigDecimal sumUserCommissionAmount(
+            @Param("benefitUserId") Long benefitUserId,
+            @Param("status") String status,
+            @Param("maxLevelNo") Integer maxLevelNo
+    );
+
+    @Select("""
+            SELECT COALESCE(SUM(commission_amount), 0)
+            FROM commission_record
+            WHERE benefit_user_id = #{benefitUserId}
+              AND status = #{status}
+              AND level_no <= #{maxLevelNo}
+              AND settled_at >= #{startAt}
+              AND settled_at < #{endAt}
+            """)
+    BigDecimal sumUserCommissionAmountBySettledAtRange(
+            @Param("benefitUserId") Long benefitUserId,
+            @Param("status") String status,
+            @Param("maxLevelNo") Integer maxLevelNo,
+            @Param("startAt") LocalDateTime startAt,
+            @Param("endAt") LocalDateTime endAt
+    );
+
+    @Select("""
+            SELECT COALESCE(SUM(commission_amount), 0)
+            FROM commission_record
+            WHERE benefit_user_id = #{benefitUserId}
+              AND status = #{status}
+              AND level_no <= #{maxLevelNo}
+              AND settled_at >= #{startAt}
+            """)
+    BigDecimal sumUserCommissionAmountSince(
+            @Param("benefitUserId") Long benefitUserId,
+            @Param("status") String status,
+            @Param("maxLevelNo") Integer maxLevelNo,
+            @Param("startAt") LocalDateTime startAt
+    );
+
+    @Select("""
+            SELECT COALESCE(SUM(commission_amount), 0)
+            FROM commission_record
+            WHERE benefit_user_id = #{benefitUserId}
+              AND status = #{status}
+              AND level_no = #{levelNo}
+            """)
+    BigDecimal sumUserCommissionAmountByLevel(
+            @Param("benefitUserId") Long benefitUserId,
+            @Param("status") String status,
+            @Param("levelNo") Integer levelNo
+    );
 }

@@ -21,9 +21,25 @@ class DatabasePerformanceIndexMigrationIT {
                     "idx_status_credited_at",
                     "ALTER TABLE `recharge_order` ADD INDEX `idx_status_credited_at` (`status`, `credited_at`)"),
             new IndexMigration(
+                    "recharge_order",
+                    "idx_status_credited_amount",
+                    "ALTER TABLE `recharge_order` ADD INDEX `idx_status_credited_amount` (`status`, `credited_at`, `actual_amount`)"),
+            new IndexMigration(
                     "withdraw_order",
                     "idx_status_paid_at",
                     "ALTER TABLE `withdraw_order` ADD INDEX `idx_status_paid_at` (`status`, `paid_at`)"),
+            new IndexMigration(
+                    "withdraw_order",
+                    "idx_status_paid_amount",
+                    "ALTER TABLE `withdraw_order` ADD INDEX `idx_status_paid_amount` (`status`, `paid_at`, `actual_amount`)"),
+            new IndexMigration(
+                    "product",
+                    "idx_product_status_available_sort",
+                    "ALTER TABLE `product` ADD INDEX `idx_product_status_available_sort` (`status`, ((CASE WHEN `available_stock` > 0 THEN 0 ELSE 1 END)), `sort_no`, `id`)"),
+            new IndexMigration(
+                    "product",
+                    "idx_product_region_gpu_available_sort",
+                    "ALTER TABLE `product` ADD INDEX `idx_product_region_gpu_available_sort` (`status`, `region_id`, `gpu_model_id`, ((CASE WHEN `available_stock` > 0 THEN 0 ELSE 1 END)), `sort_no`, `id`)"),
             new IndexMigration(
                     "rental_order",
                     "idx_profit_status",
@@ -33,13 +49,33 @@ class DatabasePerformanceIndexMigrationIT {
                     "idx_paid_at",
                     "ALTER TABLE `rental_order` ADD INDEX `idx_paid_at` (`paid_at`)"),
             new IndexMigration(
+                    "rental_order",
+                    "idx_paid_at_amount",
+                    "ALTER TABLE `rental_order` ADD INDEX `idx_paid_at_amount` (`paid_at`, `paid_amount`)"),
+            new IndexMigration(
                     "rental_profit_record",
                     "idx_status_profit_date",
                     "ALTER TABLE `rental_profit_record` ADD INDEX `idx_status_profit_date` (`status`, `profit_date`)"),
             new IndexMigration(
+                    "rental_profit_record",
+                    "idx_status_profit_date_amount",
+                    "ALTER TABLE `rental_profit_record` ADD INDEX `idx_status_profit_date_amount` (`status`, `profit_date`, `final_profit_amount`)"),
+            new IndexMigration(
                     "commission_record",
                     "idx_status_settled_at",
-                    "ALTER TABLE `commission_record` ADD INDEX `idx_status_settled_at` (`status`, `settled_at`)")
+                    "ALTER TABLE `commission_record` ADD INDEX `idx_status_settled_at` (`status`, `settled_at`)"),
+            new IndexMigration(
+                    "commission_record",
+                    "idx_status_settled_amount",
+                    "ALTER TABLE `commission_record` ADD INDEX `idx_status_settled_amount` (`status`, `settled_at`, `commission_amount`)"),
+            new IndexMigration(
+                    "commission_record",
+                    "idx_benefit_status_settled_at",
+                    "ALTER TABLE `commission_record` ADD INDEX `idx_benefit_status_settled_at` (`benefit_user_id`, `status`, `settled_at`, `commission_amount`)"),
+            new IndexMigration(
+                    "commission_record",
+                    "idx_benefit_status_level",
+                    "ALTER TABLE `commission_record` ADD INDEX `idx_benefit_status_level` (`benefit_user_id`, `status`, `level_no`, `commission_amount`)")
     );
 
     @Test
