@@ -39,6 +39,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -92,6 +93,12 @@ public class WithdrawService {
     }
 
     private WithdrawOrderResponse doCreateOrder(Long userId, CreateWithdrawOrderRequest request) {
+        var clientRequestId = requireClientRequestId(request.clientRequestId());
+        var existing = findOrderByClientRequestId(userId, clientRequestId);
+        if (existing != null) {
+            validateCreateOrderIdempotency(existing, request);
+            return toResponse(existing);
+        }
         var amount = requirePositiveAmount(request.applyAmount());
         var minAmount = sysConfigService.getBigDecimal(SysConfigDefaults.WITHDRAW_MIN_AMOUNT, new BigDecimal("10"));
         if (amount.compareTo(minAmount) < 0) {
@@ -110,6 +117,7 @@ public class WithdrawService {
 
         var order = new WithdrawOrder();
         order.setWithdrawNo(generateWithdrawNo());
+        order.setClientRequestId(clientRequestId);
         order.setUserId(userId);
         order.setWalletId(wallet.getId());
         order.setCurrency(CURRENCY_USDT);
@@ -123,7 +131,16 @@ public class WithdrawService {
         order.setStatus(WithdrawOrderStatus.PENDING_REVIEW.name());
         order.setCreatedAt(now);
         order.setUpdatedAt(now);
-        withdrawOrderMapper.insert(order);
+        try {
+            withdrawOrderMapper.insert(order);
+        } catch (DuplicateKeyException ex) {
+            var created = findOrderByClientRequestId(userId, clientRequestId);
+            if (created != null) {
+                validateCreateOrderIdempotency(created, request);
+                return toResponse(created);
+            }
+            throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT, "客户端请求号已被其他提现订单使用");
+        }
 
         var tx = walletService.freeze(
                 userId,
@@ -379,6 +396,35 @@ public class WithdrawService {
             throw new BusinessException(ErrorCode.WITHDRAW_ORDER_NOT_FOUND);
         }
         return order;
+    }
+
+    private WithdrawOrder findOrderByClientRequestId(Long userId, String clientRequestId) {
+        return withdrawOrderMapper.selectOne(baseOrderQuery()
+                .eq(WithdrawOrder::getUserId, userId)
+                .eq(WithdrawOrder::getClientRequestId, clientRequestId)
+                .last("LIMIT 1"));
+    }
+
+    private void validateCreateOrderIdempotency(WithdrawOrder existing, CreateWithdrawOrderRequest request) {
+        var requestNetwork = trimToNull(request.network());
+        if (!equalsIgnoreCase(existing.getNetwork(), requestNetwork)
+                || !java.util.Objects.equals(existing.getAccountName(), trimToNull(request.accountName()))
+                || !java.util.Objects.equals(existing.getAccountNo(), request.accountNo() == null ? null : request.accountNo().trim())
+                || requirePositiveAmount(request.applyAmount()).compareTo(existing.getApplyAmount()) != 0) {
+            throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT, "客户端请求号已被其他提现订单使用");
+        }
+    }
+
+    private boolean equalsIgnoreCase(String left, String right) {
+        return left == null ? right == null : right != null && left.equalsIgnoreCase(right);
+    }
+
+    private String requireClientRequestId(String clientRequestId) {
+        var normalized = trimToNull(clientRequestId);
+        if (!StringUtils.hasText(normalized)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "客户端请求幂等号不能为空");
+        }
+        return normalized;
     }
 
     private WithdrawOrder requireOrder(String withdrawNo) {

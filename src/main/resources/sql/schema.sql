@@ -162,6 +162,7 @@ CREATE TABLE `recharge_channel_translation` (
 CREATE TABLE `recharge_order` (
   `id`                       BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `recharge_no`              VARCHAR(64) NOT NULL COMMENT '充值单号',
+  `client_request_id`        VARCHAR(64) DEFAULT NULL COMMENT '客户端请求幂等号，同一用户内唯一，防重复创建充值单',
   `user_id`                  BIGINT NOT NULL COMMENT '用户ID',
   `wallet_id`                BIGINT NOT NULL COMMENT '钱包ID',
   `channel_id`               BIGINT NOT NULL COMMENT '充值渠道ID',
@@ -185,6 +186,7 @@ CREATE TABLE `recharge_order` (
   `updated_at`               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_recharge_no` (`recharge_no`),
+  UNIQUE KEY `uk_user_client_request` (`user_id`, `client_request_id`),
   UNIQUE KEY `uk_external_tx_no` (`external_tx_no`) COMMENT 'NULL值不受唯一约束影响，只防非空哈希重复',
   KEY `idx_user_id` (`user_id`),
   KEY `idx_wallet_id` (`wallet_id`),
@@ -201,6 +203,7 @@ CREATE TABLE `recharge_order` (
 CREATE TABLE `withdraw_order` (
   `id`              BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `withdraw_no`     VARCHAR(64) NOT NULL COMMENT '提现单号',
+  `client_request_id` VARCHAR(64) DEFAULT NULL COMMENT '客户端请求幂等号，同一用户内唯一，防重复创建提现单',
   `user_id`         BIGINT NOT NULL COMMENT '用户ID',
   `wallet_id`       BIGINT NOT NULL COMMENT '钱包ID',
   `currency`        VARCHAR(10) NOT NULL DEFAULT 'USDT' COMMENT '币种，固定USDT',
@@ -224,6 +227,7 @@ CREATE TABLE `withdraw_order` (
   `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_withdraw_no` (`withdraw_no`),
+  UNIQUE KEY `uk_user_client_request` (`user_id`, `client_request_id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_wallet_id` (`wallet_id`),
   KEY `idx_status` (`status`),
@@ -344,6 +348,7 @@ CREATE TABLE `rental_cycle_rule` (
 CREATE TABLE `rental_order` (
   `id`                                   BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `order_no`                             VARCHAR(64) NOT NULL COMMENT '订单号',
+  `client_request_id`                    VARCHAR(64) DEFAULT NULL COMMENT '客户端请求幂等号，同一用户内唯一，防重复创建租赁订单',
   `user_id`                              BIGINT NOT NULL COMMENT '用户ID',
   `product_id`                           BIGINT NOT NULL COMMENT '产品ID',
   `ai_model_id`                          BIGINT NOT NULL COMMENT 'AI模型ID',
@@ -405,6 +410,7 @@ CREATE TABLE `rental_order` (
 
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order_no` (`order_no`),
+  UNIQUE KEY `uk_user_client_request` (`user_id`, `client_request_id`),
   KEY `idx_user_id` (`user_id`),
   KEY `idx_user_status_id` (`user_id`, `order_status`, `id`),
   KEY `idx_user_product_snapshot_id` (`user_id`, `product_name_snapshot`, `id`),

@@ -20,6 +20,9 @@ public class RechargeOrder {
     @TableField("recharge_no")
     private String rechargeNo;
 
+    @TableField("client_request_id")
+    private String clientRequestId;
+
     @TableField("user_id")
     private Long userId;
 

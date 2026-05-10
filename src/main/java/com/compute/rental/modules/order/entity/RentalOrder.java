@@ -20,6 +20,9 @@ public class RentalOrder {
     @TableField("order_no")
     private String orderNo;
 
+    @TableField("client_request_id")
+    private String clientRequestId;
+
     @TableField("user_id")
     private Long userId;
 

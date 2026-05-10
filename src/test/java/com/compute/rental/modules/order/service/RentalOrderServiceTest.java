@@ -140,7 +140,7 @@ class RentalOrderServiceTest {
         mockCatalog();
         when(rentalOrderMapper.insert(any(RentalOrder.class))).thenReturn(1);
 
-        var response = rentalOrderService.createOrder(10L, new CreateRentalOrderRequest(1L, 2L, 3L));
+        var response = rentalOrderService.createOrder(10L, new CreateRentalOrderRequest(1L, 2L, 3L, "REQ001"));
 
         verify(rentalOrderMapper).insert(rentalOrderCaptor.capture());
         var saved = rentalOrderCaptor.getValue();
@@ -158,6 +158,31 @@ class RentalOrderServiceTest {
         assertThat(saved.getSettlementStatus()).isEqualTo(RentalOrderSettlementStatus.UNSETTLED.name());
         assertThat(response.orderStatus()).isEqualTo(RentalOrderStatus.PENDING_PAY.name());
         verify(walletService, never()).debit(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createOrderShouldReturnExistingWhenClientRequestIdRepeats() {
+        when(rentalOrderMapper.selectOne(any(Wrapper.class))).thenReturn(order(RentalOrderStatus.PENDING_PAY));
+
+        var response = rentalOrderService.createOrder(10L, new CreateRentalOrderRequest(1L, 2L, 3L, "REQ001"));
+
+        assertThat(response.orderNo()).isEqualTo("RO001");
+        verify(rentalOrderMapper, never()).insert(any(RentalOrder.class));
+        verify(productMapper, never()).selectById(any());
+    }
+
+    @Test
+    void createOrderShouldRejectWhenClientRequestIdReusedWithDifferentPayload() {
+        when(rentalOrderMapper.selectOne(any(Wrapper.class))).thenReturn(order(RentalOrderStatus.PENDING_PAY));
+
+        assertThatThrownBy(() -> rentalOrderService.createOrder(10L,
+                new CreateRentalOrderRequest(9L, 2L, 3L, "REQ001")))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.IDEMPOTENCY_CONFLICT);
+
+        verify(rentalOrderMapper, never()).insert(any(RentalOrder.class));
+        verify(productMapper, never()).selectById(any());
     }
 
     @Test

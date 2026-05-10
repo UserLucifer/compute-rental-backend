@@ -226,6 +226,12 @@ public class RechargeService {
     }
 
     private RechargeOrderResponse doCreateOrder(Long userId, CreateRechargeOrderRequest request) {
+        var clientRequestId = requireClientRequestId(request.clientRequestId());
+        var existing = findOrderByClientRequestId(userId, clientRequestId);
+        if (existing != null) {
+            validateCreateOrderIdempotency(existing, request);
+            return toOrderResponse(existing);
+        }
         var channel = requireEnabledChannel(request.channelId());
         var amount = MoneyUtils.requireNonNegative(request.applyAmount());
         if (amount.signum() <= 0) {
@@ -242,6 +248,7 @@ public class RechargeService {
 
         var order = new RechargeOrder();
         order.setRechargeNo(generateRechargeNo());
+        order.setClientRequestId(clientRequestId);
         order.setUserId(userId);
         order.setWalletId(wallet.getId());
         order.setChannelId(channel.getId());
@@ -260,6 +267,11 @@ public class RechargeService {
         try {
             rechargeOrderMapper.insert(order);
         } catch (DuplicateKeyException ex) {
+            var created = findOrderByClientRequestId(userId, clientRequestId);
+            if (created != null) {
+                validateCreateOrderIdempotency(created, request);
+                return toOrderResponse(created);
+            }
             throw new BusinessException(ErrorCode.RECHARGE_ORDER_DUPLICATE);
         }
         return toOrderResponse(order);
@@ -492,6 +504,31 @@ public class RechargeService {
             throw new BusinessException(ErrorCode.RECHARGE_ORDER_NOT_FOUND);
         }
         return order;
+    }
+
+    private RechargeOrder findOrderByClientRequestId(Long userId, String clientRequestId) {
+        return rechargeOrderMapper.selectOne(baseOrderQuery()
+                .eq(RechargeOrder::getUserId, userId)
+                .eq(RechargeOrder::getClientRequestId, clientRequestId)
+                .last("LIMIT 1"));
+    }
+
+    private void validateCreateOrderIdempotency(RechargeOrder existing, CreateRechargeOrderRequest request) {
+        if (!java.util.Objects.equals(existing.getChannelId(), request.channelId())
+                || MoneyUtils.scale(request.applyAmount()).compareTo(existing.getApplyAmount()) != 0
+                || !java.util.Objects.equals(existing.getExternalTxNo(), normalizeExternalTxNo(request.externalTxNo()))
+                || !java.util.Objects.equals(existing.getPaymentProofUrl(), trimToNull(request.paymentProofUrl()))
+                || !java.util.Objects.equals(existing.getUserRemark(), trimToNull(request.userRemark()))) {
+            throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT, "客户端请求号已被其他充值订单使用");
+        }
+    }
+
+    private String requireClientRequestId(String clientRequestId) {
+        var normalized = trimToNull(clientRequestId);
+        if (!StringUtils.hasText(normalized)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "客户端请求幂等号不能为空");
+        }
+        return normalized;
     }
 
     private RechargeOrder requireOrder(String rechargeNo) {

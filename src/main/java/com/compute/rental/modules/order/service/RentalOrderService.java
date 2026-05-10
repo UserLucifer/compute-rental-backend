@@ -59,6 +59,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
 
 @Service
 public class RentalOrderService {
@@ -120,12 +121,31 @@ public class RentalOrderService {
 
     @Transactional
     public RentalOrderDetailResponse createOrder(Long userId, CreateRentalOrderRequest request) {
+        return withOrderCreateLock(userId, () -> doCreateOrder(userId, request));
+    }
+
+    private RentalOrderDetailResponse doCreateOrder(Long userId, CreateRentalOrderRequest request) {
+        var clientRequestId = requireClientRequestId(request.clientRequestId());
+        var existing = findOrderByClientRequestId(userId, clientRequestId);
+        if (existing != null) {
+            validateCreateOrderIdempotency(existing, request);
+            return toDetailResponse(existing, findCredential(existing.getId()));
+        }
         var product = requireEnabledProduct(request.productId());
         var aiModel = requireEnabledAiModel(request.aiModelId());
         var cycleRule = requireEnabledCycleRule(request.cycleRuleId());
         var now = DateTimeUtils.now();
-        var order = buildOrder(userId, product, aiModel, cycleRule, now);
-        rentalOrderMapper.insert(order);
+        var order = buildOrder(userId, clientRequestId, product, aiModel, cycleRule, now);
+        try {
+            rentalOrderMapper.insert(order);
+        } catch (DuplicateKeyException ex) {
+            var created = findOrderByClientRequestId(userId, clientRequestId);
+            if (created != null) {
+                validateCreateOrderIdempotency(created, request);
+                return toDetailResponse(created, findCredential(created.getId()));
+            }
+            throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT, "客户端请求号已被其他租赁订单使用");
+        }
         return toDetailResponse(order, null);
     }
 
@@ -408,6 +428,15 @@ public class RentalOrderService {
 
     private <T> T withOrderOperationLock(String orderNo, String operation, Supplier<T> action) {
         var lockKey = RedisKeys.orderOperationLock(orderNo, operation);
+        return withOrderLock(lockKey, action);
+    }
+
+    private <T> T withOrderCreateLock(Long userId, Supplier<T> action) {
+        var lockKey = RedisKeys.orderCreateLock(userId);
+        return withOrderLock(lockKey, action);
+    }
+
+    private <T> T withOrderLock(String lockKey, Supplier<T> action) {
         var lock = redisLockClient.tryLock(lockKey, ORDER_OPERATION_LOCK_TTL);
         if (lock.isEmpty()) {
             throw new BusinessException(ErrorCode.RENTAL_ORDER_PROCESSING);
@@ -475,7 +504,7 @@ public class RentalOrderService {
         // TODO: create sys_notification ORDER_CANCELED after notification service is implemented.
     }
 
-    private RentalOrder buildOrder(Long userId, Product product, AiModel aiModel, RentalCycleRule cycleRule,
+    private RentalOrder buildOrder(Long userId, String clientRequestId, Product product, AiModel aiModel, RentalCycleRule cycleRule,
                                    java.time.LocalDateTime now) {
         var tokenOutputPerDay = product.getTokenOutputPerDay() == null ? 0L : product.getTokenOutputPerDay();
         var expectedDailyProfit = MoneyUtils.scale(BigDecimal.valueOf(tokenOutputPerDay)
@@ -484,6 +513,7 @@ public class RentalOrderService {
         var expectedTotalProfit = MoneyUtils.scale(expectedDailyProfit.multiply(BigDecimal.valueOf(cycleRule.getCycleDays())));
         var order = new RentalOrder();
         order.setOrderNo(generateOrderNo());
+        order.setClientRequestId(clientRequestId);
         order.setUserId(userId);
         order.setProductId(product.getId());
         order.setAiModelId(aiModel.getId());
@@ -598,6 +628,29 @@ public class RentalOrderService {
             throw new BusinessException(ErrorCode.RENTAL_ORDER_NOT_FOUND);
         }
         return order;
+    }
+
+    private RentalOrder findOrderByClientRequestId(Long userId, String clientRequestId) {
+        return rentalOrderMapper.selectOne(new LambdaQueryWrapper<RentalOrder>()
+                .eq(RentalOrder::getUserId, userId)
+                .eq(RentalOrder::getClientRequestId, clientRequestId)
+                .last("LIMIT 1"));
+    }
+
+    private void validateCreateOrderIdempotency(RentalOrder existing, CreateRentalOrderRequest request) {
+        if (!java.util.Objects.equals(existing.getProductId(), request.productId())
+                || !java.util.Objects.equals(existing.getAiModelId(), request.aiModelId())
+                || !java.util.Objects.equals(existing.getCycleRuleId(), request.cycleRuleId())) {
+            throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT, "客户端请求号已被其他租赁订单使用");
+        }
+    }
+
+    private String requireClientRequestId(String clientRequestId) {
+        var normalized = StringUtils.hasText(clientRequestId) ? clientRequestId.trim() : null;
+        if (!StringUtils.hasText(normalized)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "客户端请求幂等号不能为空");
+        }
+        return normalized;
     }
 
     private ApiCredential findCredential(Long rentalOrderId) {

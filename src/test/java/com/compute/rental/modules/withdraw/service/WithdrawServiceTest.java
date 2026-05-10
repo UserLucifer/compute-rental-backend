@@ -118,7 +118,8 @@ class WithdrawServiceTest {
                 "TRC20",
                 "name",
                 "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
-                new BigDecimal("50.00000000")
+                new BigDecimal("50.00000000"),
+                "REQ001"
         ));
 
         verify(withdrawOrderMapper).insert(withdrawOrderCaptor.capture());
@@ -132,6 +133,25 @@ class WithdrawServiceTest {
     }
 
     @Test
+    void createOrderShouldReturnExistingWhenClientRequestIdRepeats() {
+        var existing = order(WithdrawOrderStatus.PENDING_REVIEW, "50.00000000");
+        existing.setAccountName("name");
+        when(withdrawOrderMapper.selectOne(any(Wrapper.class))).thenReturn(existing);
+
+        var response = withdrawService.createOrder(10L, new CreateWithdrawOrderRequest(
+                "TRC20",
+                "name",
+                "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
+                new BigDecimal("50.00000000"),
+                "REQ001"
+        ));
+
+        assertThat(response.withdrawNo()).isEqualTo("WD001");
+        verify(withdrawOrderMapper, never()).insert(any(WithdrawOrder.class));
+        verify(walletService, never()).freeze(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void createOrderShouldRejectWhenUserCreateLockExists() {
         when(redisLockClient.tryLock(eq(RedisKeys.withdrawCreateLock(10L)), any())).thenReturn(Optional.empty());
 
@@ -139,7 +159,8 @@ class WithdrawServiceTest {
                 "TRC20",
                 "name",
                 "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
-                new BigDecimal("50.00000000")
+                new BigDecimal("50.00000000"),
+                "REQ001"
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
@@ -158,7 +179,8 @@ class WithdrawServiceTest {
                 "TRC20",
                 null,
                 "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
-                new BigDecimal("9.99000000")
+                new BigDecimal("9.99000000"),
+                "REQ001"
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
@@ -179,7 +201,8 @@ class WithdrawServiceTest {
                 "TRC20",
                 null,
                 "bad",
-                new BigDecimal("10.00000000")
+                new BigDecimal("10.00000000"),
+                "REQ001"
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
@@ -199,7 +222,8 @@ class WithdrawServiceTest {
                 "TRC20",
                 null,
                 "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
-                new BigDecimal("30.00000000")
+                new BigDecimal("30.00000000"),
+                "REQ001"
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")

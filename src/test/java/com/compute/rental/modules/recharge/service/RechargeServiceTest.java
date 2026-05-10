@@ -116,7 +116,8 @@ class RechargeServiceTest {
                 new BigDecimal("600.00000000"),
                 "tx001",
                 "proof.png",
-                "remark"
+                "remark",
+                "REQ001"
         ));
 
         verify(rechargeOrderMapper).insert(rechargeOrderCaptor.capture());
@@ -125,6 +126,28 @@ class RechargeServiceTest {
         assertThat(saved.getApplyAmount()).isEqualByComparingTo("600.00000000");
         assertThat(saved.getExternalTxNo()).isEqualTo("tx001");
         assertThat(response.status()).isEqualTo(RechargeOrderStatus.SUBMITTED.name());
+    }
+
+    @Test
+    void createOrderShouldReturnExistingWhenClientRequestIdRepeats() {
+        var existing = order(RechargeOrderStatus.SUBMITTED);
+        existing.setExternalTxNo("tx001");
+        existing.setPaymentProofUrl("proof.png");
+        existing.setUserRemark("remark");
+        when(rechargeOrderMapper.selectOne(any(Wrapper.class))).thenReturn(existing);
+
+        var response = rechargeService.createOrder(10L, new CreateRechargeOrderRequest(
+                1L,
+                new BigDecimal("500.00000000"),
+                "tx001",
+                "proof.png",
+                "remark",
+                "REQ001"
+        ));
+
+        assertThat(response.rechargeNo()).isEqualTo("RC001");
+        verify(rechargeOrderMapper, never()).insert(any(RechargeOrder.class));
+        verify(userWalletMapper, never()).selectOne(any(Wrapper.class));
     }
 
     @Test
@@ -173,7 +196,8 @@ class RechargeServiceTest {
                 new BigDecimal("600.00000000"),
                 "tx001",
                 "proof.png",
-                "remark"
+                "remark",
+                "REQ001"
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
@@ -194,7 +218,8 @@ class RechargeServiceTest {
                 new BigDecimal("599.00000000"),
                 null,
                 null,
-                null
+                null,
+                "REQ001"
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
@@ -207,14 +232,15 @@ class RechargeServiceTest {
         when(rechargeChannelMapper.selectById(1L)).thenReturn(channel(null));
         when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.RECHARGE_MIN_AMOUNT), any(BigDecimal.class)))
                 .thenReturn(new BigDecimal("500.00000000"));
-        when(rechargeOrderMapper.selectOne(any(Wrapper.class))).thenReturn(order(RechargeOrderStatus.SUBMITTED));
+        when(rechargeOrderMapper.selectOne(any(Wrapper.class))).thenReturn(null, order(RechargeOrderStatus.SUBMITTED));
 
         assertThatThrownBy(() -> rechargeService.createOrder(10L, new CreateRechargeOrderRequest(
                 1L,
                 new BigDecimal("500.00000000"),
                 "tx001",
                 null,
-                null
+                null,
+                "REQ001"
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")

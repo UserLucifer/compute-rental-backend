@@ -56,6 +56,10 @@ public final class RedisKeys {
         return LOCK_PREFIX + "order:" + orderNo + ":" + operation;
     }
 
+    public static String orderCreateLock(Long userId) {
+        return LOCK_PREFIX + "order:create:" + userId;
+    }
+
     public static String withdrawCreateLock(Long userId) {
         return LOCK_PREFIX + "withdraw:create:" + userId;
     }

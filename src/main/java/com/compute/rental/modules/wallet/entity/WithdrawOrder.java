@@ -20,6 +20,9 @@ public class WithdrawOrder {
     @TableField("withdraw_no")
     private String withdrawNo;
 
+    @TableField("client_request_id")
+    private String clientRequestId;
+
     @TableField("user_id")
     private Long userId;
 
