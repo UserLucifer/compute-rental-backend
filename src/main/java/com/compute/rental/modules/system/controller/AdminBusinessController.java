@@ -91,7 +91,7 @@ public class AdminBusinessController {
     public ApiResponse<PageResult<AdminWalletResponse>> wallets(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
-            @Parameter(description = "模糊搜索关键词，匹配用户名称或邮箱")
+            @Parameter(description = "用户搜索关键词，精确匹配用户编号/邮箱，前缀匹配用户名称/邮箱")
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false, name = "user_id") Long userId,
             @RequestParam(required = false, name = "wallet_no") String walletNo
@@ -110,7 +110,7 @@ public class AdminBusinessController {
     public ApiResponse<PageResult<AdminWalletTransactionResponse>> walletTransactions(
             @RequestParam(defaultValue = "1") long pageNo,
             @RequestParam(defaultValue = "10") long pageSize,
-            @Parameter(description = "模糊搜索关键词，匹配用户名称或邮箱")
+            @Parameter(description = "用户搜索关键词，精确匹配用户编号/邮箱，前缀匹配用户名称/邮箱")
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false, name = "user_id") Long userId,
             @RequestParam(required = false, name = "wallet_no") String walletNo,

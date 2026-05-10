@@ -31,6 +31,7 @@ import com.compute.rental.modules.system.service.SysConfigDefaults;
 import com.compute.rental.modules.system.service.SysConfigService;
 import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
+import com.compute.rental.modules.user.support.AppUserSearchSupport;
 import com.compute.rental.modules.wallet.entity.RechargeChannel;
 import com.compute.rental.modules.wallet.entity.RechargeChannelTranslation;
 import com.compute.rental.modules.wallet.entity.RechargeOrder;
@@ -630,16 +631,11 @@ public class RechargeService {
     }
 
     private List<Long> userIdsByKeyword(String keyword) {
-        if (!StringUtils.hasText(keyword)) {
+        var normalizedKeyword = AppUserSearchSupport.normalize(keyword);
+        if (!AppUserSearchSupport.hasText(normalizedKeyword)) {
             return Collections.emptyList();
         }
-        var normalizedKeyword = keyword.trim();
-        return appUserMapper.selectList(new LambdaQueryWrapper<AppUser>()
-                        .select(AppUser::getId)
-                        .and(wrapper -> wrapper
-                                .like(AppUser::getUserName, normalizedKeyword)
-                                .or()
-                                .like(AppUser::getEmail, normalizedKeyword)))
+        return appUserMapper.selectList(AppUserSearchSupport.idQuery(normalizedKeyword))
                 .stream()
                 .map(AppUser::getId)
                 .toList();

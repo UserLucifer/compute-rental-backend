@@ -10,11 +10,11 @@ import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.entity.UserTeamRelation;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.user.mapper.UserTeamRelationMapper;
+import com.compute.rental.modules.user.support.AppUserSearchSupport;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 @Service
 public class TeamService {
@@ -63,14 +63,11 @@ public class TeamService {
     }
 
     private List<Long> findMatchedUserIds(String keyword) {
-        if (!StringUtils.hasText(keyword)) {
+        var normalizedKeyword = AppUserSearchSupport.normalize(keyword);
+        if (!AppUserSearchSupport.hasText(normalizedKeyword)) {
             return null;
         }
-        return appUserMapper.selectList(new LambdaQueryWrapper<AppUser>()
-                        .select(AppUser::getId)
-                        .and(wrapper -> wrapper.like(AppUser::getEmail, keyword)
-                                .or()
-                                .like(AppUser::getUserName, keyword)))
+        return appUserMapper.selectList(AppUserSearchSupport.idQuery(normalizedKeyword))
                 .stream()
                 .map(AppUser::getId)
                 .toList();

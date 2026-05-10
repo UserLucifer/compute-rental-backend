@@ -44,6 +44,7 @@ import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.entity.UserTeamRelation;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.user.mapper.UserTeamRelationMapper;
+import com.compute.rental.modules.user.support.AppUserSearchSupport;
 import com.compute.rental.modules.wallet.entity.UserWallet;
 import com.compute.rental.modules.wallet.entity.WalletTransaction;
 import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
@@ -118,13 +119,14 @@ public class AdminBusinessQueryService {
             LocalDateTime endTime
     ) {
         var page = new Page<AppUser>(pageNo, pageSize);
+        var normalizedKeyword = AppUserSearchSupport.normalize(keyword);
+        var normalizedEmail = AppUserSearchSupport.normalize(email);
+        var normalizedUserId = AppUserSearchSupport.normalize(userId);
         var wrapper = new LambdaQueryWrapper<AppUser>()
-                .and(hasText(keyword), userWrapper -> userWrapper
-                        .like(AppUser::getEmail, keyword)
-                        .or()
-                        .like(AppUser::getUserName, keyword))
-                .eq(hasText(userId), AppUser::getUserId, userId)
-                .like(hasText(email), AppUser::getEmail, email)
+                .and(AppUserSearchSupport.hasText(normalizedKeyword),
+                        userWrapper -> AppUserSearchSupport.applyKeyword(userWrapper, normalizedKeyword))
+                .eq(AppUserSearchSupport.hasText(normalizedUserId), AppUser::getUserId, normalizedUserId)
+                .likeRight(AppUserSearchSupport.hasText(normalizedEmail), AppUser::getEmail, normalizedEmail)
                 .eq(status != null, AppUser::getStatus, status)
                 .ge(startTime != null, AppUser::getCreatedAt, startTime)
                 .le(endTime != null, AppUser::getCreatedAt, endTime)
@@ -932,15 +934,11 @@ public class AdminBusinessQueryService {
     }
 
     private List<Long> userIdsByKeyword(String keyword) {
-        if (!hasText(keyword)) {
+        var normalizedKeyword = AppUserSearchSupport.normalize(keyword);
+        if (!AppUserSearchSupport.hasText(normalizedKeyword)) {
             return Collections.emptyList();
         }
-        return appUserMapper.selectList(new LambdaQueryWrapper<AppUser>()
-                        .select(AppUser::getId)
-                        .and(wrapper -> wrapper
-                                .like(AppUser::getUserName, keyword)
-                                .or()
-                                .like(AppUser::getEmail, keyword)))
+        return appUserMapper.selectList(AppUserSearchSupport.idQuery(normalizedKeyword))
                 .stream()
                 .map(AppUser::getId)
                 .toList();

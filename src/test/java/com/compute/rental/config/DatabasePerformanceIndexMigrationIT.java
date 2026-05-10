@@ -17,6 +17,10 @@ class DatabasePerformanceIndexMigrationIT {
 
     private static final List<IndexMigration> INDEX_MIGRATIONS = List.of(
             new IndexMigration(
+                    "app_user",
+                    "idx_user_name",
+                    "ALTER TABLE `app_user` ADD INDEX `idx_user_name` (`user_name`)"),
+            new IndexMigration(
                     "recharge_order",
                     "idx_status_credited_at",
                     "ALTER TABLE `recharge_order` ADD INDEX `idx_status_credited_at` (`status`, `credited_at`)"),

@@ -25,6 +25,7 @@ import com.compute.rental.modules.user.entity.UserReferralRelation;
 import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.user.mapper.UserReferralRelationMapper;
+import com.compute.rental.modules.user.support.AppUserSearchSupport;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -132,12 +133,11 @@ public class CommissionService {
     }
 
     private List<Long> findMatchedSourceUserIds(String keyword) {
-        if (!StringUtils.hasText(keyword)) {
+        var normalizedKeyword = AppUserSearchSupport.normalize(keyword);
+        if (!AppUserSearchSupport.hasText(normalizedKeyword)) {
             return null;
         }
-        return appUserMapper.selectList(new LambdaQueryWrapper<AppUser>()
-                        .select(AppUser::getId)
-                        .like(AppUser::getUserName, keyword))
+        return appUserMapper.selectList(AppUserSearchSupport.idQuery(normalizedKeyword))
                 .stream()
                 .map(AppUser::getId)
                 .toList();
