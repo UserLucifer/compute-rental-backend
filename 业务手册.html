@@ -1,0 +1,2351 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>算力租赁平台后端业务手册（上线校准版）</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #647084;
+      --line: #d8dee9;
+      --panel: #ffffff;
+      --bg: #f5f7fb;
+      --brand: #1457d9;
+      --brand-soft: #eaf1ff;
+      --ok: #168258;
+      --ok-soft: #e8f7f0;
+      --warn: #b7791f;
+      --warn-soft: #fff6db;
+      --bad: #c53030;
+      --bad-soft: #fff0f0;
+      --violet: #6b46c1;
+      --violet-soft: #f1ecff;
+      --teal: #047481;
+      --teal-soft: #e6f7f9;
+      --code: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.65;
+      letter-spacing: 0;
+    }
+
+    a {
+      color: var(--brand);
+      text-decoration: none;
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: 292px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      background: #101827;
+      color: #dbe5f3;
+      padding: 24px 18px;
+      border-right: 1px solid #0b1220;
+    }
+
+    aside h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.3;
+      color: #fff;
+    }
+
+    aside p {
+      margin: 0 0 18px;
+      color: #9aa9bf;
+      font-size: 13px;
+    }
+
+    nav {
+      display: grid;
+      gap: 3px;
+    }
+
+    nav a {
+      display: block;
+      padding: 7px 8px;
+      border-radius: 6px;
+      color: #dbe5f3;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    nav a:hover {
+      background: #1f2a3d;
+      color: #fff;
+    }
+
+    main {
+      min-width: 0;
+      padding: 32px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #10213e 0%, #143d6f 46%, #0b6f77 100%);
+      color: #fff;
+      border-radius: 10px;
+      padding: 34px;
+      margin-bottom: 24px;
+      box-shadow: 0 18px 48px rgba(16, 33, 62, 0.18);
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .hero p {
+      max-width: 980px;
+      margin: 0;
+      color: #d8e7ff;
+      font-size: 15px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.13);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 28px;
+      margin: 0 0 20px;
+      box-shadow: 0 8px 24px rgba(23, 32, 51, 0.04);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 18px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    h4 {
+      margin: 18px 0 8px;
+      font-size: 15px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 8px 0 12px;
+    }
+
+    ul,
+    ol {
+      padding-left: 22px;
+      margin: 8px 0 12px;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    code {
+      color: var(--code);
+      background: #eef2f7;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+      font-size: 0.92em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #f0f4fa;
+      font-weight: 800;
+      color: #253047;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #fbfcff;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .card h4 {
+      margin-top: 0;
+    }
+
+    .note,
+    .risk,
+    .success,
+    .todo {
+      border-radius: 8px;
+      border: 1px solid;
+      padding: 12px 14px;
+      margin: 12px 0;
+    }
+
+    .note {
+      background: var(--brand-soft);
+      border-color: #c9d9ff;
+    }
+
+    .risk {
+      background: var(--bad-soft);
+      border-color: #ffc7c7;
+    }
+
+    .success {
+      background: var(--ok-soft);
+      border-color: #bfe8d3;
+    }
+
+    .todo {
+      background: var(--warn-soft);
+      border-color: #f2d38b;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 2px 8px;
+      margin: 1px 3px 1px 0;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .tag.blue {
+      color: #174ea6;
+      background: var(--brand-soft);
+      border-color: #c9d9ff;
+    }
+
+    .tag.green {
+      color: #0f6847;
+      background: var(--ok-soft);
+      border-color: #bfe8d3;
+    }
+
+    .tag.yellow {
+      color: #805600;
+      background: var(--warn-soft);
+      border-color: #f2d38b;
+    }
+
+    .tag.red {
+      color: #9b1c1c;
+      background: var(--bad-soft);
+      border-color: #ffc7c7;
+    }
+
+    .tag.purple {
+      color: var(--violet);
+      background: var(--violet-soft);
+      border-color: #d8cbff;
+    }
+
+    .tag.teal {
+      color: var(--teal);
+      background: var(--teal-soft);
+      border-color: #b8e7ed;
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      gap: 8px;
+      margin: 14px 0 18px;
+    }
+
+    .flow .node {
+      min-width: 150px;
+      flex: 1 1 150px;
+      border: 1px solid #cfd7e6;
+      background: #fff;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+    }
+
+    .flow .node strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .flow .node span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .flow .arrow {
+      align-self: center;
+      color: var(--muted);
+      font-weight: 800;
+      padding: 0 1px;
+    }
+
+    .flow .split {
+      border-color: #d7c6ff;
+      background: var(--violet-soft);
+    }
+
+    .flow .money {
+      border-color: #bfe8d3;
+      background: var(--ok-soft);
+    }
+
+    .flow .warn {
+      border-color: #f2d38b;
+      background: var(--warn-soft);
+    }
+
+    .flow .bad {
+      border-color: #ffc7c7;
+      background: var(--bad-soft);
+    }
+
+    .lane {
+      display: grid;
+      grid-template-columns: 128px minmax(0, 1fr);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .lane-title {
+      background: #edf2f7;
+      padding: 12px;
+      font-weight: 800;
+      border-right: 1px solid var(--line);
+    }
+
+    .lane-body {
+      padding: 12px;
+    }
+
+    .status-chain {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin: 8px 0 14px;
+    }
+
+    .status-chain span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      border-radius: 6px;
+      padding: 4px 9px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .status-chain b {
+      color: var(--muted);
+    }
+
+    .checklist {
+      counter-reset: item;
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .checklist li {
+      position: relative;
+      padding-left: 34px;
+      margin: 10px 0;
+    }
+
+    .checklist li::before {
+      counter-increment: item;
+      content: counter(item);
+      position: absolute;
+      left: 0;
+      top: 1px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #101827;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 1080px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        position: static;
+        height: auto;
+      }
+
+      nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      main {
+        padding: 20px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      main {
+        padding: 12px;
+      }
+
+      section,
+      .hero {
+        padding: 18px;
+      }
+
+      .grid,
+      .grid.two {
+        grid-template-columns: 1fr;
+      }
+
+      .lane {
+        grid-template-columns: 1fr;
+      }
+
+      .lane-title {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      nav {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      aside {
+        display: none;
+      }
+
+      .page {
+        display: block;
+      }
+
+      main {
+        padding: 0;
+      }
+
+      section,
+      .hero {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <aside>
+      <h2>业务手册目录</h2>
+      <p>面向产品经理的上线前业务校准材料，基于当前后端代码与数据库模型静态梳理。</p>
+      <nav>
+        <a href="#intro">1. 从 0 认识系统</a>
+        <a href="#map">2. 业务地图与角色</a>
+        <a href="#rules">3. 全局规则</a>
+        <a href="#main-flow">4. 主业务闭环</a>
+        <a href="#auth">5. 账号、邀请与团队</a>
+        <a href="#catalog">6. 商品与收益测算</a>
+        <a href="#wallet">7. 钱包与账务</a>
+        <a href="#recharge">8. 充值业务</a>
+        <a href="#rental">9. 租赁订单业务</a>
+        <a href="#profit">10. 每日收益业务</a>
+        <a href="#commission">11. 佣金与团队业务</a>
+        <a href="#settlement">12. 到期/提前结算</a>
+        <a href="#withdraw">13. 提现业务</a>
+        <a href="#admin">14. 后台运营业务</a>
+        <a href="#notification">15. 消息与设备</a>
+        <a href="#content">16. 内容业务</a>
+        <a href="#status">17. 状态字典</a>
+        <a href="#risks">18. 上线校准清单</a>
+      </nav>
+    </aside>
+
+    <main>
+      <div class="hero">
+        <h1>算力租赁平台后端业务手册（上线校准版）</h1>
+        <p>
+          本手册把当前后端系统拆成产品经理能直接校准的业务流程：每个业务从哪里开始、经过哪些状态、由谁触发状态变化、何时闭环、账务如何发生、哪些地方当前代码已有实现、哪些地方需要上线前确认。
+        </p>
+        <div class="meta">
+          <span class="pill">生成日期：2026-05-08</span>
+          <span class="pill">依据：当前后端代码与数据库结构</span>
+          <span class="pill">用途：上线前业务校准</span>
+          <span class="pill">范围：后端业务，不含前端页面验收</span>
+        </div>
+      </div>
+
+      <section id="intro">
+        <h2>1. 从 0 认识系统</h2>
+        <p>
+          这是一个“用户用钱包余额购买算力机器租赁权益，再通过 AI 模型收益规则获得每日收益，到期或提前结束后返还本金并结算收益”的平台。系统还支持邀请关系、团队收益佣金、充值、提现、后台审核、内容文章、文档、站内消息等配套业务。
+        </p>
+
+        <div class="grid">
+          <div class="card">
+            <h4>用户在前台做什么</h4>
+            <ul>
+              <li>注册、登录、重置密码。</li>
+              <li>浏览地区、GPU、机器商品、AI 模型、租赁周期。</li>
+              <li>充值 USDT，等后台审核入账。</li>
+              <li>创建租赁订单，支付机器租赁费。</li>
+              <li>支付 API 部署费后订单立即运行，24 小时后系统自动暂停，用户可再次启动。</li>
+              <li>订单运行后每天获得收益，到期或提前结算后返还本金。</li>
+              <li>查看收益、佣金、团队、钱包流水，申请提现。</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>管理员在后台做什么</h4>
+            <ul>
+              <li>维护商品、地区、GPU 型号、AI 模型、租赁周期。</li>
+              <li>维护充值渠道，审核充值订单。</li>
+              <li>审核提现、确认打款。</li>
+              <li>查看用户、订单、钱包流水、收益、佣金、团队和看板。</li>
+              <li>维护系统参数，手动触发定时任务。</li>
+              <li>维护博客、文档、站内消息。</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>系统自动做什么</h4>
+            <ul>
+              <li>根据 JWT 识别用户/管理员身份。</li>
+              <li>控制邮箱验证码频率与有效期。</li>
+              <li>用钱包流水记录每一笔资金变化。</li>
+              <li>订单支付后生成 API 凭证，并在超时未部署时取消。</li>
+              <li>API 部署付款后 24 小时自动暂停，等用户启动。</li>
+              <li>每日定时结算租赁收益与上级佣金。</li>
+              <li>订单到期后自动返还本金并关闭订单。</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="note">
+          <strong>阅读方式：</strong>产品校准时建议先看第 4 节主业务闭环，再逐个看第 8 至第 13 节资金和订单流程，最后用第 18 节清单逐条确认需求是否一致。
+        </div>
+      </section>
+
+      <section id="map">
+        <h2>2. 业务地图与角色</h2>
+
+        <h3>2.1 角色边界</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>角色</th>
+              <th>可做的事情</th>
+              <th>业务边界</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>游客</td>
+              <td>查看公开商品、地区、GPU、AI 模型、租赁周期、博客、文档；提交租赁收益测算。</td>
+              <td>不能创建订单、不能使用钱包、不能查看个人收益。</td>
+            </tr>
+            <tr>
+              <td>注册用户</td>
+              <td>充值、创建租赁订单、支付机器费、支付部署费、启动订单、提前结算、提现、查看团队和佣金。</td>
+              <td>需要账号状态为启用；部分服务还会校验钱包启用。</td>
+            </tr>
+            <tr>
+              <td>管理员</td>
+              <td>管理后台数据、审核充值提现、查看经营数据、触发定时任务、维护内容和站内消息。</td>
+              <td>后台接口需要管理员角色；管理员退出当前只记录日志，不做 token 黑名单。</td>
+            </tr>
+            <tr>
+              <td>系统定时任务</td>
+              <td>超时取消、自动暂停、每日收益、到期结算、佣金生成。</td>
+              <td>依赖数据库状态与系统时间；失败会影响业务推进，需要运营监控。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>2.2 核心对象关系</h3>
+        <div class="flow">
+          <div class="node"><strong>app_user</strong><span>用户主档，含账号状态、上级邀请码、登录时间。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>user_wallet</strong><span>每个用户一个钱包，记录可用、冻结、累计充值/提现/收益/佣金。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>wallet_transaction</strong><span>所有资金变化都写流水，含幂等键、交易号、前后余额。</span></div>
+        </div>
+        <div class="flow">
+          <div class="node"><strong>product / ai_model / cycle_rule</strong><span>商品、AI 模型和周期决定订单金额、预计收益和罚金规则。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>rental_order</strong><span>租赁订单主表，保存商品快照、金额、收益、生命周期状态。</span></div>
+          <div class="arrow">→</div>
+          <div class="node split"><strong>api_credential / api_deploy_order</strong><span>支付机器费后生成 API 凭证，支付部署费后进入激活流程。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>profit / settlement / commission</strong><span>每日收益、订单结算、上级佣金三类后续财务结果。</span></div>
+        </div>
+        <div class="flow">
+          <div class="node"><strong>recharge_order</strong><span>用户提交充值凭证，后台审核通过后钱包入账。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>withdraw_order</strong><span>用户申请提现，先冻结，后台审核与打款后扣减冻结。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>sys_admin_log / scheduler_log</strong><span>后台操作和定时任务执行记录，用于追踪运营动作。</span></div>
+        </div>
+
+        <h3>2.3 业务分层</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>包含模块</th>
+              <th>产品理解</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>基础身份层</td>
+              <td>注册、登录、邮箱验证码、JWT、管理员登录。</td>
+              <td>决定谁能进入系统、以什么身份操作。</td>
+            </tr>
+            <tr>
+              <td>商品配置层</td>
+              <td>地区、GPU、机器商品、AI 模型、租赁周期、翻译、缓存。</td>
+              <td>决定用户看到什么商品、订单价格和预计收益如何计算。</td>
+            </tr>
+            <tr>
+              <td>资金账户层</td>
+              <td>钱包、充值、提现、钱包流水、系统参数。</td>
+              <td>所有钱的进出都必须落到钱包流水，余额变化可追踪。</td>
+            </tr>
+            <tr>
+              <td>订单履约层</td>
+              <td>租赁订单、机器费支付、API 凭证、部署费、启动、暂停、结算。</td>
+              <td>平台核心闭环，决定用户买的机器从创建到结束怎么走。</td>
+            </tr>
+            <tr>
+              <td>收益分配层</td>
+              <td>每日收益、佣金、团队关系、结算单。</td>
+              <td>决定用户每天赚多少，上级按什么比例拿佣金。</td>
+            </tr>
+            <tr>
+              <td>运营支撑层</td>
+              <td>后台管理、看板、消息、博客、文档、推送设备。</td>
+              <td>给运营配置、审核、观察、通知和内容发布使用。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="rules">
+        <h2>3. 全局规则</h2>
+
+        <h3>3.1 登录与权限</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>接口类型</th>
+              <th>权限规则</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>公开接口</td>
+              <td><code>/api/auth/**</code>、博客、文档、健康检查、公开商品查询、租赁测算等不要求登录。</td>
+              <td>游客可访问公开商品和内容。</td>
+            </tr>
+            <tr>
+              <td>用户接口</td>
+              <td>除公开和后台接口外，默认需要用户 JWT，角色为 <code>ROLE_USER</code>。</td>
+              <td>用户登录后拿到 Bearer Token。</td>
+            </tr>
+            <tr>
+              <td>后台接口</td>
+              <td><code>/api/admin/**</code> 需要管理员 JWT，角色为 <code>ROLE_ADMIN</code>。</td>
+              <td>管理员登录与退出会写后台日志。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="risk">
+          <strong>已闭环：</strong>JWT 过滤器每次请求都会重新查询用户/管理员当前状态。用户或管理员被禁用后，旧 token 不再建立认证，受保护接口会按未登录处理。当前仍未实现主动退出 token 黑名单，退出主要依赖前端丢弃 token 和过期时间。
+        </div>
+
+        <h3>3.2 时间、金额与配置</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>规则</th>
+              <th>当前实现</th>
+              <th>业务影响</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>业务时区</td>
+              <td>统一使用 <code>Asia/Shanghai</code>。</td>
+              <td>每日收益、提现日限额、到期结算都按北京时间理解。</td>
+            </tr>
+            <tr>
+              <td>金额精度</td>
+              <td>钱包金额使用 8 位小数，舍入方式为 <code>HALF_DOWN</code>。</td>
+              <td>USDT、收益、佣金、罚金都按 8 位处理。</td>
+            </tr>
+            <tr>
+              <td>系统配置缓存</td>
+              <td>系统参数读取后缓存 10 分钟，后台更新会清缓存。</td>
+              <td>提现费率、最低充值等配置可运营调整。</td>
+            </tr>
+            <tr>
+              <td>默认充值最低金额</td>
+              <td><code>recharge.min_amount = 500</code>。</td>
+              <td>若充值渠道也设置最低金额，取两者较大值。</td>
+            </tr>
+            <tr>
+              <td>默认提现最低金额</td>
+              <td><code>withdraw.min_amount = 10</code>。</td>
+              <td>用户提现申请金额必须大于等于该值。</td>
+            </tr>
+            <tr>
+              <td>默认提现免手续费门槛</td>
+              <td><code>withdraw.fee_free_threshold = 100</code>。</td>
+              <td>申请金额达到 100 时当前实现手续费为 0。</td>
+            </tr>
+            <tr>
+              <td>默认提现手续费率</td>
+              <td><code>withdraw.fee_rate = 0.05</code>。</td>
+              <td>未达到免手续费门槛时，手续费 = 申请金额 * 5%。</td>
+            </tr>
+            <tr>
+              <td>默认每日提现上限</td>
+              <td><code>withdraw.max_daily_amount = 100000</code>。</td>
+              <td>统计当天待审、已通过、已打款的提现申请金额。</td>
+            </tr>
+            <tr>
+              <td>默认待部署超时</td>
+              <td><code>order.pending_activation_timeout_minutes = 60</code>。</td>
+              <td>机器费已付但部署费未付，超过 60 分钟自动取消并退机器费。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3.3 并发与幂等</h3>
+        <ul>
+          <li>钱包更新使用版本号乐观锁，防止同一钱包并发扣款导致余额错乱。</li>
+          <li>充值创建、提现创建、租赁支付、部署费支付等关键动作使用 Redis 锁，避免重复提交。</li>
+          <li>钱包流水带唯一交易号和幂等键，重复业务动作应避免重复入账或扣款。</li>
+          <li>收益记录有订单和收益日期唯一约束，佣金记录有来源收益和层级唯一约束。</li>
+        </ul>
+
+        <h3>3.4 多语言</h3>
+        <p>
+          商品、地区、GPU、AI 模型、租赁周期、充值渠道、博客、文档、通知等支持翻译表。业务接口通常按语言参数优先读取翻译，未命中时回退默认中文字段。
+        </p>
+      </section>
+
+      <section id="main-flow">
+        <h2>4. 主业务闭环</h2>
+        <p>
+          平台最核心的闭环是：用户注册获得钱包，充值后创建租赁订单，支付机器费，支付部署费，等待自动暂停后启动运行，系统每天发收益，上级每天拿佣金，到期自动返还本金；如果用户提前结束，则扣提前结算罚金后返还剩余本金。
+        </p>
+
+        <h3>4.1 主链路流程图</h3>
+        <div class="flow">
+          <div class="node"><strong>注册/登录</strong><span>用户通过邮箱验证码注册，系统创建用户、钱包、邀请关系。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>充值入账</strong><span>用户提交充值凭证，后台审核通过后钱包可用余额增加。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>选择商品</strong><span>选择地区、GPU、机器、AI 模型、租赁周期，系统计算预计收益。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>支付机器费</strong><span>钱包扣机器租赁费，订单进入待激活并生成 API 凭证。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>支付部署费</strong><span>钱包扣部署费，API 立即生效，订单进入运行中。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>自动暂停</strong><span>部署付款 24 小时后系统自动暂停，等待用户启动。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>用户启动</strong><span>订单进入运行中，收益周期开始计算。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>每日收益/佣金</strong><span>每天定时给用户发租赁收益，并给上级发佣金。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>结算闭环</strong><span>到期自动返还本金；提前结算则扣罚金后返还本金。</span></div>
+        </div>
+
+        <h3>4.2 主链路泳道</h3>
+        <div class="lane">
+          <div class="lane-title">用户</div>
+          <div class="lane-body">
+            注册 → 充值 → 创建租赁订单 → 支付机器费 → 支付部署费并开始运行 → 24 小时后自动暂停 → 用户再次启动或提前结算 → 查看每日收益 → 到期收回本金 → 提现。
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-title">后台</div>
+          <div class="lane-body">
+            配置商品/AI/周期 → 审核充值 → 审核提现 → 查看订单与财务数据 → 必要时手动触发定时任务 → 维护内容和消息。
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-title">系统</div>
+          <div class="lane-body">
+            创建钱包和邀请链 → 扣款/入账写流水 → 生成 API 凭证 → 超时取消 → 自动暂停 → 每日收益 → 佣金生成 → 到期结算。
+          </div>
+        </div>
+
+        <h3>4.3 主链路状态总览</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>阶段</th>
+              <th>主要状态</th>
+              <th>触发人/触发器</th>
+              <th>资金变化</th>
+              <th>闭环结果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>充值</td>
+              <td>SUBMITTED（已提交） → APPROVED（已审核通过） / REJECTED（已拒绝） / CANCELED（已取消）</td>
+              <td>用户提交、用户取消、后台审核</td>
+              <td>仅 APPROVED（已审核通过） 时钱包可用余额增加</td>
+              <td>用户获得可消费余额，或充值单终止</td>
+            </tr>
+            <tr>
+              <td>租赁订单</td>
+              <td>PENDING_PAY（待支付） → PENDING_ACTIVATION（待支付部署费） → RUNNING（运行中） → PAUSED（已暂停） → RUNNING（运行中） → EXPIRED（已过期） / EARLY_CLOSED（提前关闭）</td>
+              <td>用户支付、自动暂停任务、用户启动、到期任务、提前结算</td>
+              <td>支付机器费扣余额；支付部署费扣余额；结算返还本金</td>
+              <td>订单到期关闭或提前关闭</td>
+            </tr>
+            <tr>
+              <td>每日收益</td>
+              <td>PENDING（待处理） → SETTLED（已结算）</td>
+              <td>每日收益定时任务</td>
+              <td>钱包可用余额增加</td>
+              <td>收益入账后可提现或继续消费</td>
+            </tr>
+            <tr>
+              <td>佣金</td>
+              <td>PENDING（待处理） → SETTLED（已结算）</td>
+              <td>佣金定时任务</td>
+              <td>上级钱包可用余额增加</td>
+              <td>佣金入账后可提现或继续消费</td>
+            </tr>
+            <tr>
+              <td>提现</td>
+              <td>PENDING_REVIEW（待审核） → APPROVED（已审核通过） → PAID（已支付）；或 REJECTED（已拒绝） / CANCELED（已取消）</td>
+              <td>用户申请、用户取消、后台审核、后台打款</td>
+              <td>申请时冻结；取消/拒绝解冻；打款后扣冻结</td>
+              <td>链上打款完成或资金回到可用余额</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="auth">
+        <h2>5. 账号、邀请与团队</h2>
+
+        <h3>5.1 注册从哪里开始</h3>
+        <p>
+          注册从用户输入邮箱并发送注册验证码开始。系统先检查邮箱是否已经注册，未注册才允许发送验证码。验证码会写入数据库，并通过 Redis 控制短时间重复发送和每分钟发送次数。
+        </p>
+
+        <div class="flow">
+          <div class="node"><strong>发送注册验证码</strong><span>邮箱未注册，生成 SIGNUP（注册） 验证码，状态 UNUSED（未使用）。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>校验验证码</strong><span>查找最新未使用、未过期验证码。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>创建用户钱包</strong><span>用户状态 ENABLED（启用），钱包 USDT 可用/冻结均为 0。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>创建邀请关系</strong><span>生成自己的邀请码，记录一级、二级上级。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>返回 JWT</strong><span>用户注册后直接登录。</span></div>
+        </div>
+
+        <h3>5.2 账号状态</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>含义</th>
+              <th>如何产生</th>
+              <th>影响</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag green">ENABLED（启用） = 1</span></td>
+              <td>账号启用。</td>
+              <td>注册默认启用。</td>
+              <td>允许登录和正常操作；JWT 每次请求都会校验账号仍为 ENABLED（启用）。</td>
+            </tr>
+            <tr>
+              <td><span class="tag red">DISABLED（禁用） = 0</span></td>
+              <td>账号禁用。</td>
+              <td>后台禁用用户。</td>
+              <td>不能重新登录；旧 JWT 立即失效；系统会暂停 RUNNING（运行中）订单、关闭运行片段并暂停 ACTIVE（生效中）API 凭证。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="risk">
+          <strong>已确认口径：</strong>后台禁用用户时，会暂停 RUNNING（运行中）订单、关闭运行片段，并暂停 ACTIVE（生效中）API 凭证；不处理 PENDING_PAY（待支付）、PENDING_ACTIVATION（待支付部署费）、ACTIVATING（激活中）等状态。禁用后用户不会再被启用，旧 JWT 会被后端实时拦截。
+        </div>
+
+        <h3>5.3 邮箱验证码状态</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>说明</th>
+              <th>触发方式</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>UNUSED（未使用）</td>
+              <td>验证码已生成，尚未使用。</td>
+              <td>发送注册验证码或重置密码验证码。</td>
+            </tr>
+            <tr>
+              <td>USED（已使用）</td>
+              <td>验证码已被消费。</td>
+              <td>用户注册成功或重置密码成功。</td>
+            </tr>
+            <tr>
+              <td>EXPIRED（已过期）</td>
+              <td>枚举存在，但当前主要通过过期时间判断，不主动把状态更新为 EXPIRED（已过期）。</td>
+              <td>当前代码未看到主动置为 EXPIRED（已过期） 的流程。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>5.4 邀请和团队怎么形成</h3>
+        <p>
+          用户注册时如果填写邀请码，系统会找到直接邀请人，并把直接邀请人作为一级上级；直接邀请人的一级上级成为二级上级。当前代理体系最多只保存两级关系，第三层及更深层级不写入团队关系，也不参与佣金计算。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>关系层级</th>
+              <th>来源</th>
+              <th>后续用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>一级上级</td>
+              <td>用户注册时填写的邀请码对应用户。</td>
+              <td>获得一级佣金。</td>
+            </tr>
+            <tr>
+              <td>二级上级</td>
+              <td>一级上级的一级上级。</td>
+              <td>获得二级佣金。</td>
+            </tr>
+            <tr>
+              <td>团队闭包关系</td>
+              <td>注册时最多写入 1、2 两层团队关系。</td>
+              <td>用于团队列表、团队人数统计；层级筛选只支持 1 和 2。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          <strong>当前代理口径：</strong>代理链路已从原来的三级调整为二级。用户侧团队汇总只返回总团队数、直属团队数、二级团队数；后台用户团队查询也只统计两级。
+        </div>
+      </section>
+
+      <section id="catalog">
+        <h2>6. 商品与收益测算</h2>
+
+        <h3>6.1 商品配置由哪些对象组成</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>对象</th>
+              <th>业务含义</th>
+              <th>关键字段</th>
+              <th>谁维护</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Region</td>
+              <td>机房/地区。</td>
+              <td>地区编码、名称、排序、启用状态。</td>
+              <td>后台管理员。</td>
+            </tr>
+            <tr>
+              <td>GpuModel</td>
+              <td>GPU 型号。</td>
+              <td>型号编码、名称、排序、启用状态。</td>
+              <td>后台管理员。</td>
+            </tr>
+            <tr>
+              <td>Product</td>
+              <td>可租赁机器商品。</td>
+              <td>商品编码、机器码、地区、GPU、显存、租赁价格、每日 token 产出、库存、硬件信息、可租日期、启用状态。</td>
+              <td>后台管理员。</td>
+            </tr>
+            <tr>
+              <td>AiModel</td>
+              <td>用户选择的 AI 模型。</td>
+              <td>模型编码、名称、token 单价、部署费、启用状态。</td>
+              <td>后台管理员。</td>
+            </tr>
+            <tr>
+              <td>RentalCycleRule</td>
+              <td>租赁周期规则。</td>
+              <td>周期天数、收益倍数、提前结算罚金比例、启用状态。</td>
+              <td>后台管理员。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>6.2 用户如何看到商品</h3>
+        <div class="flow">
+          <div class="node"><strong>后台配置</strong><span>管理员维护地区、GPU、商品、AI 模型和周期。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>启用状态</strong><span>只有 ENABLED（启用） 的配置会出现在公开接口。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>缓存 5 分钟</strong><span>目录类查询会走 Redis 缓存。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>前台展示</strong><span>按语言返回翻译名称，未配置时回退默认名称。</span></div>
+        </div>
+
+        <h3>6.3 收益测算公式</h3>
+        <p>
+          用户选择商品、AI 模型和周期后，系统会用当前配置计算预计收益。创建订单时这些配置会固化为订单快照，后续后台改商品价格或收益参数，不会自动改变已经创建的订单。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>指标</th>
+              <th>公式</th>
+              <th>解释</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>预计每日收益</td>
+              <td><code>商品每日 token 产出 * AI 模型 token 单价 * 周期收益倍数</code></td>
+              <td>订单运行后每日收益也按这个快照公式生成。</td>
+            </tr>
+            <tr>
+              <td>预计总收益</td>
+              <td><code>预计每日收益 * 周期天数</code></td>
+              <td>仅是预计值，实际收益按每日定时任务逐天入账。</td>
+            </tr>
+            <tr>
+              <td>机器租赁费</td>
+              <td><code>商品租赁价格</code></td>
+              <td>支付机器费时从钱包可用余额扣除。</td>
+            </tr>
+            <tr>
+              <td>API 部署费</td>
+              <td><code>AI 模型部署费</code></td>
+              <td>支付部署费时从钱包可用余额扣除。</td>
+            </tr>
+            <tr>
+              <td>提前结算罚金</td>
+              <td><code>机器租赁费 * 周期提前结算罚金比例</code></td>
+              <td>提前结算时只影响返还本金，不从钱包额外扣余额。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="risk">
+          <strong>已确认口径：</strong>商品库存、已租库存、可用库存和可租日期当前只作为后台展示/运营参考字段，不参与下单交易校验。创建订单只校验商品、AI 模型、周期是否启用。
+        </div>
+      </section>
+
+      <section id="wallet">
+        <h2>7. 钱包与账务</h2>
+
+        <h3>7.1 钱包是什么</h3>
+        <p>
+          每个用户注册时会自动创建一个 USDT 钱包。钱包分为可用余额和冻结余额。可用余额能用于支付订单、支付部署费和申请提现；冻结余额主要用于提现审核期间锁住资金。
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>字段</th>
+              <th>业务含义</th>
+              <th>何时变化</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>availableBalance</td>
+              <td>可用余额。</td>
+              <td>充值、收益、佣金、结算返还会增加；支付机器费、部署费、提现冻结会减少。</td>
+            </tr>
+            <tr>
+              <td>frozenBalance</td>
+              <td>冻结余额。</td>
+              <td>用户申请提现时增加；取消/拒绝提现时减少；提现打款后扣减。</td>
+            </tr>
+            <tr>
+              <td>totalRecharge</td>
+              <td>累计充值。</td>
+              <td>充值审核通过入账时增加。</td>
+            </tr>
+            <tr>
+              <td>totalWithdraw</td>
+              <td>累计提现。</td>
+              <td>提现打款成功时按实际到账金额增加。</td>
+            </tr>
+            <tr>
+              <td>totalProfit</td>
+              <td>累计租赁收益。</td>
+              <td>每日收益入账时增加。</td>
+            </tr>
+            <tr>
+              <td>totalCommission</td>
+              <td>累计佣金收益。</td>
+              <td>佣金入账时增加。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>7.2 钱包流水类型</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>流水类型</th>
+              <th>余额变化</th>
+              <th>典型业务</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>IN（入账）</td>
+              <td>可用余额增加。</td>
+              <td>充值入账、每日收益、佣金、订单结算返还本金、退款。</td>
+            </tr>
+            <tr>
+              <td>OUT（支出）</td>
+              <td>可用余额减少，或仅记录无余额变化的罚金流水。</td>
+              <td>机器费支付、部署费支付、提前结算罚金记录。</td>
+            </tr>
+            <tr>
+              <td>FREEZE（冻结）</td>
+              <td>可用余额减少，冻结余额增加。</td>
+              <td>用户提交提现申请。</td>
+            </tr>
+            <tr>
+              <td>UNFREEZE（解冻）</td>
+              <td>冻结余额减少，可用余额增加。</td>
+              <td>用户取消提现或后台拒绝提现。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>7.3 业务类型</h3>
+        <p>
+          钱包流水还会记录业务类型，用来解释这笔钱为什么变化。当前已定义业务类型包括：充值、提现、租赁支付、API 部署费、租赁收益、佣金收益、结算返还、提前罚金、退款、后台调整。
+        </p>
+        <div class="todo">
+          <strong>校准点：</strong><code>ADJUST（调账）</code> 后台调整枚举存在，但当前未看到后台人工调账接口。若上线需要人工调账，需要补齐审批、日志、权限和流水说明。
+        </div>
+      </section>
+
+      <section id="recharge">
+        <h2>8. 充值业务</h2>
+
+        <h3>8.1 充值从哪里开始</h3>
+        <p>
+          充值从用户选择一个启用的充值渠道并提交充值订单开始。用户提交金额、链上交易号或凭证等信息后，充值单进入待审核。后台审核通过后，系统才给钱包入账。
+        </p>
+
+        <div class="flow">
+          <div class="node"><strong>用户选择渠道</strong><span>只能使用 ENABLED（启用） 的充值渠道。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>提交充值单</strong><span>金额必须达到系统和渠道最低金额。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>SUBMITTED（已提交）</strong><span>等待后台审核，用户可取消。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>APPROVED（已审核通过）</strong><span>后台审核通过，按实际到账金额给钱包入账。</span></div>
+          <div class="arrow">/</div>
+          <div class="node bad"><strong>REJECTED（已拒绝） / CANCELED（已取消）</strong><span>后台拒绝或用户取消，不产生钱包入账。</span></div>
+        </div>
+
+        <h3>8.2 充值状态与触发</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>业务含义</th>
+              <th>进入条件</th>
+              <th>可去向</th>
+              <th>资金影响</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag yellow">SUBMITTED（已提交）</span></td>
+              <td>用户已提交，等待审核。</td>
+              <td>用户创建充值订单成功。</td>
+              <td>APPROVED（已审核通过）、REJECTED（已拒绝）、CANCELED（已取消）。</td>
+              <td>无资金变化。</td>
+            </tr>
+            <tr>
+              <td><span class="tag green">APPROVED（已审核通过）</span></td>
+              <td>后台确认充值有效。</td>
+              <td>管理员审核通过。</td>
+              <td>终态。</td>
+              <td>钱包可用余额增加，累计充值增加，写 RECHARGE 流水。</td>
+            </tr>
+            <tr>
+              <td><span class="tag red">REJECTED（已拒绝）</span></td>
+              <td>后台确认充值无效。</td>
+              <td>管理员审核拒绝。</td>
+              <td>终态。</td>
+              <td>无资金变化。</td>
+            </tr>
+            <tr>
+              <td><span class="tag red">CANCELED（已取消）</span></td>
+              <td>用户主动取消。</td>
+              <td>用户取消 SUBMITTED（已提交） 充值单。</td>
+              <td>终态。</td>
+              <td>无资金变化。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>8.3 充值校验规则</h3>
+        <ul>
+          <li>充值渠道必须启用。</li>
+          <li>充值金额必须大于 0。</li>
+          <li>充值金额必须不低于系统最低充值金额和渠道最低充值金额的较大值。</li>
+          <li>如果用户提交外部交易号，当前会检查重复，避免同一链上交易号重复提交。</li>
+          <li>创建充值订单时会加用户级 Redis 锁，减少重复提交。</li>
+        </ul>
+
+        <div class="todo">
+          <strong>业务缺口确认：</strong>当前充值是人工审核模型，没有看到链上自动回调入账流程。若产品要求自动到账，需要新增链上确认、回调幂等、异常补偿和审核兜底规则。
+        </div>
+      </section>
+
+      <section id="rental">
+        <h2>9. 租赁订单业务</h2>
+
+        <h3>9.1 租赁订单完整状态链</h3>
+        <div class="status-chain">
+          <span>PENDING_PAY（待支付）</span><b>→</b>
+          <span>PENDING_ACTIVATION（待支付部署费）</span><b>→</b>
+          <span>RUNNING（运行中）</span><b>→</b>
+          <span>PAUSED（已暂停）</span><b>→</b>
+          <span>RUNNING（运行中）</span><b>→</b>
+          <span>EXPIRED（已过期）</span>
+        </div>
+        <div class="status-chain">
+          <span>PENDING_PAY（待支付）</span><b>→</b><span>CANCELED（已取消）</span>
+          <span>PENDING_ACTIVATION（待支付部署费）</span><b>→</b><span>CANCELED（已取消）</span>
+          <span>RUNNING（运行中） / PAUSED（已暂停）</span><b>→</b><span>EARLY_CLOSED（提前关闭）</span>
+        </div>
+
+        <h3>9.2 创建订单</h3>
+        <p>
+          用户先选择商品、AI 模型和租赁周期，然后创建租赁订单。创建时不会扣钱，只会生成 PENDING_PAY（待支付） 订单，并保存商品、模型、周期的快照字段。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>检查项</th>
+              <th>当前规则</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>商品</td>
+              <td>商品必须存在且状态 ENABLED（启用）。</td>
+            </tr>
+            <tr>
+              <td>AI 模型</td>
+              <td>AI 模型必须存在且状态 ENABLED（启用）。</td>
+            </tr>
+            <tr>
+              <td>租赁周期</td>
+              <td>周期规则必须存在且状态 ENABLED（启用）。</td>
+            </tr>
+            <tr>
+              <td>订单金额</td>
+              <td>取商品租赁价格快照。</td>
+            </tr>
+            <tr>
+              <td>预计收益</td>
+              <td>用商品每日 token 产出、AI token 单价、周期收益倍数计算并写入快照。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>9.3 支付机器费</h3>
+        <div class="flow">
+          <div class="node warn"><strong>PENDING_PAY（待支付）</strong><span>订单已创建但未支付。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>钱包扣机器费</strong><span>扣除 orderAmount，写 RENT_PAY（租赁支付） 流水。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>生成 API 凭证</strong><span>凭证状态 GENERATED（已生成），保存加密 token 和脱敏 token。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>PENDING_ACTIVATION（待支付部署费）</strong><span>等待用户支付部署费。</span></div>
+        </div>
+
+        <p>
+          支付机器费成功后，订单的 <code>paidAmount</code> 等于订单金额，记录 <code>paidAt</code> 和 <code>apiGeneratedAt</code>。如果用户余额不足，支付失败，订单仍保持 PENDING_PAY（待支付）。
+        </p>
+
+        <h3>9.4 待激活阶段的取消和超时</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>场景</th>
+              <th>允许状态</th>
+              <th>触发方式</th>
+              <th>结果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>用户取消未付款订单</td>
+              <td>PENDING_PAY（待支付）</td>
+              <td>用户点击取消。</td>
+              <td>订单 CANCELED（已取消），不涉及退款。</td>
+            </tr>
+            <tr>
+              <td>用户取消已付机器费订单</td>
+              <td>PENDING_ACTIVATION（待支付部署费）</td>
+              <td>用户点击取消。</td>
+              <td>订单 CANCELED（已取消），机器费退回钱包，API 凭证 REVOKED（已撤销）。</td>
+            </tr>
+            <tr>
+              <td>系统超时取消</td>
+              <td>PENDING_ACTIVATION（待支付部署费）</td>
+              <td>定时任务每 10 分钟扫描，默认 60 分钟未支付部署费。</td>
+              <td>订单 CANCELED（已取消），机器费退回钱包，API 凭证 REVOKED（已撤销）。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>9.5 支付 API 部署费</h3>
+        <div class="flow">
+          <div class="node warn"><strong>PENDING_ACTIVATION（待支付部署费）</strong><span>机器费已付，API 凭证 GENERATED（已生成）。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>钱包扣部署费</strong><span>扣除 AI 模型部署费，写 API_DEPLOY_FEE（API部署费） 流水。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>部署订单 PAID（已支付）</strong><span>创建 api_deploy_order 并立即置为 PAID（已支付）。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>API ACTIVE（生效中）</strong><span>API 凭证立即生效。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>订单 RUNNING（运行中）</strong><span>设置 startedAt、profitStartAt、profitEndAt 和 autoPauseAt。</span></div>
+        </div>
+
+        <div class="todo">
+          <strong>当前期排除：</strong>部署订单状态定义包含 PENDING_PAY（待支付）、PAID（已支付）、CANCELED（已取消）、REFUNDED（已退款）。当前上线口径只使用 PENDING_PAY（待支付）→ PAID（已支付），部署订单取消/退款流程暂不纳入本期。
+        </div>
+
+        <h3>9.6 激活后自动暂停与用户启动</h3>
+        <div class="flow">
+          <div class="node money"><strong>RUNNING（运行中）</strong><span>部署费已付，订单立即开始运行并写入收益周期。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>运行片段开始</strong><span>记录 segmentStartAt，后续收益只按片段分钟计算。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>自动暂停</strong><span>每 5 分钟扫描 autoPauseAt 到期的订单，关闭运行片段。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>PAUSED（已暂停）</strong><span>订单和 API 凭证都暂停。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>用户再次启动</strong><span>用户手动 start，开启新的运行片段。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>RUNNING（运行中）</strong><span>租期不重置、不延长，到 profitEndAt 结束。</span></div>
+        </div>
+
+        <p>
+          用户支付部署费成功后，系统把订单直接置为 RUNNING（运行中），设置 <code>startedAt</code>、<code>profitStartAt</code> 和 <code>profitEndAt</code>。收益结束时间 = 部署费支付成功时间 + 周期天数。自动暂停不会延长租期；用户从 PAUSED（已暂停）再次启动时只开启新的运行片段，原 <code>profitEndAt</code> 不变。
+        </p>
+
+        <div class="note">
+          <strong>API 凭证展示口径：</strong>API Token 当前仅作为页面展示用的模拟凭证。系统保存加密 token 和脱敏 token，前台只展示脱敏信息，不向用户交付可复制调用的明文 token；本期测试不把明文 token 交付作为业务闭环要求。
+        </div>
+
+        <h3>9.7 租赁订单状态说明</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>产品含义</th>
+              <th>进入触发</th>
+              <th>允许动作/后续</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag yellow">PENDING_PAY（待支付）</span></td>
+              <td>订单已创建，机器费未支付。</td>
+              <td>用户创建订单。</td>
+              <td>用户支付机器费；用户取消。</td>
+            </tr>
+            <tr>
+              <td><span class="tag blue">PAID（已支付）</span></td>
+              <td>枚举保留状态。</td>
+              <td>当前主流程未使用该状态。</td>
+              <td>前端枚举也未暴露。</td>
+            </tr>
+            <tr>
+              <td><span class="tag yellow">PENDING_ACTIVATION（待支付部署费）</span></td>
+              <td>机器费已付，API 凭证已生成，等待支付部署费。</td>
+              <td>用户支付机器费成功。</td>
+              <td>用户支付部署费；用户取消；超时自动取消。</td>
+            </tr>
+            <tr>
+              <td><span class="tag purple">ACTIVATING（激活中）</span></td>
+              <td>枚举保留/兼容状态。</td>
+              <td>当前部署费支付成功后主流程直接进入 RUNNING（运行中）。</td>
+              <td>自动暂停任务仍兼容扫描该状态。</td>
+            </tr>
+            <tr>
+              <td><span class="tag yellow">PAUSED（已暂停）</span></td>
+              <td>订单暂停中，暂停期间不产生收益，但租期继续消耗。</td>
+              <td>自动暂停任务；后台禁用用户。</td>
+              <td>未到期时用户可启动；已到期则等待系统到期结算；用户也可提前结算。</td>
+            </tr>
+            <tr>
+              <td><span class="tag green">RUNNING（运行中）</span></td>
+              <td>订单运行中，每日收益可产生。</td>
+              <td>部署费支付成功；或用户从 PAUSED（已暂停）启动。</td>
+              <td>每日收益；到期结算；提前结算；后台禁用用户会暂停。</td>
+            </tr>
+            <tr>
+              <td><span class="tag green">EXPIRED（已过期）</span></td>
+              <td>订单到期完成。</td>
+              <td>到期结算任务。</td>
+              <td>终态。</td>
+            </tr>
+            <tr>
+              <td><span class="tag purple">SETTLING（结算中）</span></td>
+              <td>结算中短暂状态。</td>
+              <td>到期或提前结算过程中。</td>
+              <td>很快变为 EXPIRED（已过期） 或 EARLY_CLOSED（提前关闭）。</td>
+            </tr>
+            <tr>
+              <td><span class="tag green">SETTLED（已结算）</span></td>
+              <td>枚举保留状态。</td>
+              <td>当前主流程未看到实际落该状态。</td>
+              <td>前端枚举未暴露。</td>
+            </tr>
+            <tr>
+              <td><span class="tag red">EARLY_CLOSED（提前关闭）</span></td>
+              <td>用户提前结算关闭。</td>
+              <td>用户对 RUNNING（运行中） 或 PAUSED（已暂停） 订单提前结算。</td>
+              <td>终态。</td>
+            </tr>
+            <tr>
+              <td><span class="tag red">CANCELED（已取消）</span></td>
+              <td>订单取消。</td>
+              <td>用户取消 PENDING_PAY（待支付）/PENDING_ACTIVATION（待支付部署费）；或部署费超时未支付。</td>
+              <td>终态。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="risk">
+          <strong>已校准口径：</strong>部署费支付后订单立即 RUNNING（运行中）并开始租期；24 小时自动暂停只是平台粘性机制，暂停期间没有收益但租期继续消耗，用户再次启动不会重算或延长周期。
+        </div>
+      </section>
+
+      <section id="profit">
+        <h2>10. 每日收益业务</h2>
+
+        <h3>10.1 收益什么时候开始</h3>
+        <p>
+          收益不是从创建订单或支付机器费时开始，而是从用户支付部署费成功、订单进入 RUNNING（运行中） 时开始。系统会写入 <code>profitStartAt</code> 和 <code>profitEndAt</code>，并开启第一段运行片段；后续暂停再启动会开启新的运行片段，但不会改变租期结束时间。
+        </p>
+
+        <div class="flow">
+          <div class="node"><strong>部署费支付成功</strong><span>订单直接进入 RUNNING（运行中）。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>开启运行片段</strong><span>记录真实运行起点。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>暂停则关闭片段</strong><span>PAUSED（已暂停） 不产收益，租期继续走。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>每日 00:00</strong><span>结算上一自然日的运行分钟收益。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>收益入账</strong><span>钱包可用余额增加，收益记录 SETTLED（已结算）。</span></div>
+        </div>
+
+        <h3>10.2 收益记录状态</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>说明</th>
+              <th>进入触发</th>
+              <th>资金影响</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag yellow">PENDING（待处理）</span></td>
+              <td>收益记录创建但尚未入账。</td>
+              <td>每日收益任务或到期结算任务补结当天收益时创建记录。</td>
+              <td>短暂状态，尚未增加钱包。</td>
+            </tr>
+            <tr>
+              <td><span class="tag green">SETTLED（已结算）</span></td>
+              <td>收益已入账。</td>
+              <td>钱包成功 credit。</td>
+              <td>用户钱包可用余额增加，累计租赁收益增加。</td>
+            </tr>
+            <tr>
+              <td><span class="tag red">CANCELED（已取消）</span></td>
+              <td>枚举存在。</td>
+              <td>当前未看到主流程使用。</td>
+              <td>无当前业务说明。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>10.3 每日收益计算</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>字段</th>
+              <th>来源</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>tokenOutput</td>
+              <td>订单快照：商品每日 token 产出。</td>
+              <td>创建订单时从商品复制。</td>
+            </tr>
+            <tr>
+              <td>tokenUnitPrice</td>
+              <td>订单快照：AI 模型 token 单价。</td>
+              <td>创建订单时从 AI 模型复制。</td>
+            </tr>
+            <tr>
+              <td>yieldMultiplier</td>
+              <td>订单快照：周期收益倍数。</td>
+              <td>创建订单时从周期规则复制。</td>
+            </tr>
+            <tr>
+              <td>完整日收益</td>
+              <td><code>tokenOutput * tokenUnitPrice * yieldMultiplier</code></td>
+              <td>完整运行 1440 分钟的理论日收益，也是前台预估日收益口径。</td>
+            </tr>
+            <tr>
+              <td>effectiveMinutes</td>
+              <td>运行片段在该自然日内的完整分钟数汇总。</td>
+              <td>只计算 RUNNING（运行中） 片段的完整分钟；PAUSED（已暂停） 时间不计收益，不足 1 分钟不计。</td>
+            </tr>
+            <tr>
+              <td>finalProfit</td>
+              <td><code>完整日收益 / 1440 * effectiveMinutes</code></td>
+              <td>实际入账金额。有效分钟为 0 时不生成收益记录。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="note">
+          <strong>当前收益口径：</strong>每日收益任务每天 00:00 后结算刚刚结束的上一自然日收益；收益按运行片段汇总完整分钟。订单到期或用户提前结算时，如果当前自然日还有未结算运行分钟，会先补结到截止时间，再返还本金并关闭订单。
+        </div>
+
+        <h3>10.4 哪些订单不会产生收益</h3>
+        <ul>
+          <li>未进入运行的订单：PENDING_PAY（待支付）、PENDING_ACTIVATION（待支付部署费）、ACTIVATING（激活中）。</li>
+          <li>PAUSED（已暂停） 期间：订单暂停不产收益，但租期继续消耗；暂停前已经形成的运行片段仍会在每日收益或最终结算时入账。</li>
+          <li>已结束的订单：EXPIRED（已过期）、EARLY_CLOSED（提前关闭）、CANCELED（已取消）。</li>
+          <li>待结算自然日没有任何运行片段交集的订单。</li>
+          <li>当天有效运行时长不足 1 个完整分钟的订单。</li>
+          <li>同一订单同一收益日期已经生成过收益记录的订单。</li>
+        </ul>
+      </section>
+
+      <section id="commission">
+        <h2>11. 佣金与团队业务</h2>
+
+        <h3>11.1 佣金从哪里开始</h3>
+        <p>
+          佣金不是从用户充值、支付订单或提现时产生，而是从“下级用户每日租赁收益已入账”开始。佣金任务每 5 分钟扫描已经 SETTLED（已结算） 且未生成佣金的收益记录，然后按邀请链给一级、二级上级发佣金。
+        </p>
+
+        <div class="flow">
+          <div class="node money"><strong>下级收益 SETTLED（已结算）</strong><span>下级每日收益已经进入钱包。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>查邀请链</strong><span>只查一级、二级上级。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>取佣金规则</strong><span>优先使用启用规则，无规则时使用默认比例。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>佣金入账</strong><span>给上级钱包增加可用余额。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>标记已生成</strong><span>收益记录 commissionGenerated = 1。</span></div>
+        </div>
+
+        <h3>11.2 佣金比例</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>默认比例</th>
+              <th>来源</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>一级</td>
+              <td>20%</td>
+              <td>启用的 commission_rule；无配置时默认 20%。</td>
+            </tr>
+            <tr>
+              <td>二级</td>
+              <td>10%</td>
+              <td>启用的 commission_rule；无配置时默认 10%。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          <strong>佣金统计口径：</strong>当前佣金枚举、佣金规则、用户佣金列表、后台佣金列表都只支持 1、2 两个层级。用户佣金汇总不再直接读取钱包的累计佣金字段，而是按已结算佣金记录汇总一级和二级金额。
+        </div>
+
+        <h3>11.3 佣金状态</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>说明</th>
+              <th>触发</th>
+              <th>资金变化</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag yellow">PENDING（待处理）</span></td>
+              <td>佣金记录创建但尚未入账。</td>
+              <td>佣金任务创建记录。</td>
+              <td>短暂状态，尚未增加钱包。</td>
+            </tr>
+            <tr>
+              <td><span class="tag green">SETTLED（已结算）</span></td>
+              <td>佣金已经入账。</td>
+              <td>上级钱包 credit 成功。</td>
+              <td>上级可用余额增加，累计佣金增加。</td>
+            </tr>
+            <tr>
+              <td><span class="tag red">CANCELED（已取消）</span></td>
+              <td>枚举存在。</td>
+              <td>当前未看到主流程使用。</td>
+              <td>无当前业务说明。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="note">
+          <strong>产品口径：</strong>佣金只基于下级每日租赁收益生成，不基于充值、购买机器费、部署费、提现或本金结算生成。
+        </div>
+      </section>
+
+      <section id="settlement">
+        <h2>12. 到期/提前结算</h2>
+
+        <h3>12.1 到期结算</h3>
+        <p>
+          到期结算由系统定时任务触发。任务每 1 分钟扫描 RUNNING（运行中） 或 PAUSED（已暂停） 且收益结束时间已到的订单；命中后先按运行片段补结尚未结算的完整分钟收益，再把订单改为结算中，创建结算单，返还机器租赁本金，最后把订单置为 EXPIRED（已过期）。
+        </p>
+
+        <div class="flow">
+          <div class="node money"><strong>RUNNING（运行中） / PAUSED（已暂停）</strong><span>profitEndAt 已到，暂停订单也要到期结算。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>补结未结收益</strong><span>按运行片段完整分钟补结到 profitEndAt。</span></div>
+          <div class="arrow">→</div>
+          <div class="node split"><strong>SETTLING（结算中）</strong><span>订单进入结算中，避免重复结算。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>创建结算单</strong><span>type = EXPIRE（到期结算），status = SETTLED（已结算）。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>返还本金</strong><span>actualSettle = orderAmount，钱包入账 SETTLEMENT。</span></div>
+          <div class="arrow">→</div>
+          <div class="node green"><strong>EXPIRED（已过期）</strong><span>订单完成，API 凭证 EXPIRED（已过期）。</span></div>
+        </div>
+
+        <h3>12.2 提前结算</h3>
+        <p>
+          用户可对 RUNNING（运行中） 或 PAUSED（已暂停） 订单发起提前结算。提前结算会先关闭当前运行片段并按完整分钟补结到当前时间，再按照订单快照中的罚金比例计算罚金，并返还“本金 - 罚金”。罚金当前以无余额变化的流水记录下来，不会再从用户钱包额外扣款。
+        </p>
+
+        <div class="flow">
+          <div class="node warn"><strong>RUNNING（运行中） / PAUSED（已暂停）</strong><span>只有这两个状态可提前结算。</span></div>
+          <div class="arrow">→</div>
+          <div class="node split"><strong>SETTLING（结算中）</strong><span>订单进入结算中。</span></div>
+          <div class="arrow">→</div>
+          <div class="node bad"><strong>计算罚金</strong><span>penalty = orderAmount * earlyPenaltyRate。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>返还剩余本金</strong><span>actualSettle = orderAmount - penalty。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>EARLY_CLOSED（提前关闭）</strong><span>订单关闭，API 凭证 REVOKED（已撤销）。</span></div>
+        </div>
+
+        <h3>12.3 结算单状态</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>含义</th>
+              <th>当前使用情况</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>PENDING（待处理）</td>
+              <td>待处理。</td>
+              <td>枚举存在，当前到期和提前结算都直接创建 SETTLED（已结算）。</td>
+            </tr>
+            <tr>
+              <td>SETTLED（已结算）</td>
+              <td>已结算。</td>
+              <td>当前主流程使用，到期和提前结算都直接完成。</td>
+            </tr>
+            <tr>
+              <td>REJECTED（已拒绝）</td>
+              <td>已拒绝。</td>
+              <td>枚举存在，当前未看到后台审核拒绝流程。</td>
+            </tr>
+            <tr>
+              <td>CANCELED（已取消）</td>
+              <td>已取消。</td>
+              <td>枚举存在，当前未看到主流程使用。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="todo">
+          <strong>产品确认：</strong>结算类型包含 EXPIRE（到期结算）、EARLY_TERMINATE（提前终止）、MANUAL（人工处理），但当前只看到到期和提前结算入口；MANUAL（人工处理） 人工结算、结算审核、拒绝、取消当前未形成业务流程。
+        </div>
+      </section>
+
+      <section id="withdraw">
+        <h2>13. 提现业务</h2>
+
+        <h3>13.1 提现从哪里开始</h3>
+        <p>
+          提现从用户提交提现申请开始。系统先校验金额、每日限额、提现地址格式和钱包余额，然后把申请金额从可用余额转入冻结余额。后台审核通过后，管理员再确认已打款；打款确认后，冻结余额被扣减，提现闭环。
+        </p>
+
+        <div class="flow">
+          <div class="node"><strong>用户申请提现</strong><span>校验金额、日限额、地址、余额。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>冻结资金</strong><span>可用余额减少，冻结余额增加。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>PENDING_REVIEW（待审核）</strong><span>等待后台审核，用户可取消。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>APPROVED（已审核通过）</strong><span>后台审核通过，等待打款。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>PAID（已支付）</strong><span>后台确认打款，扣减冻结余额。</span></div>
+        </div>
+        <div class="flow">
+          <div class="node warn"><strong>PENDING_REVIEW（待审核）</strong><span>待审核。</span></div>
+          <div class="arrow">→</div>
+          <div class="node bad"><strong>CANCELED（已取消）</strong><span>用户取消，冻结资金解冻。</span></div>
+          <div class="arrow">/</div>
+          <div class="node bad"><strong>REJECTED（已拒绝）</strong><span>后台拒绝，冻结资金解冻。</span></div>
+        </div>
+
+        <h3>13.2 提现状态与资金变化</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>业务含义</th>
+              <th>进入触发</th>
+              <th>后续</th>
+              <th>资金变化</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag yellow">PENDING_REVIEW（待审核）</span></td>
+              <td>提现待后台审核。</td>
+              <td>用户创建提现申请成功。</td>
+              <td>用户取消、后台通过、后台拒绝。</td>
+              <td>申请金额已从可用转冻结。</td>
+            </tr>
+            <tr>
+              <td><span class="tag blue">APPROVED（已审核通过）</span></td>
+              <td>后台审核通过，等待实际打款。</td>
+              <td>管理员审核通过。</td>
+              <td>后台确认打款；后台仍可拒绝。</td>
+              <td>资金仍在冻结中。</td>
+            </tr>
+            <tr>
+              <td><span class="tag green">PAID（已支付）</span></td>
+              <td>后台已确认打款。</td>
+              <td>管理员填写打款信息并确认 paid。</td>
+              <td>终态。</td>
+              <td>冻结余额扣减；累计提现按实际到账金额增加。</td>
+            </tr>
+            <tr>
+              <td><span class="tag red">REJECTED（已拒绝）</span></td>
+              <td>后台拒绝提现。</td>
+              <td>管理员拒绝 PENDING_REVIEW（待审核） 或 APPROVED（已审核通过） 订单。</td>
+              <td>终态。</td>
+              <td>冻结资金解冻回可用余额。</td>
+            </tr>
+            <tr>
+              <td><span class="tag red">CANCELED（已取消）</span></td>
+              <td>用户取消提现。</td>
+              <td>用户取消 PENDING_REVIEW（待审核） 订单。</td>
+              <td>终态。</td>
+              <td>冻结资金解冻回可用余额。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>13.3 手续费和到账金额</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>规则</th>
+              <th>当前实现</th>
+              <th>举例</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>免手续费</td>
+              <td>申请金额大于等于免手续费门槛时，手续费为 0。</td>
+              <td>门槛 100，申请 100，手续费 0。</td>
+            </tr>
+            <tr>
+              <td>收手续费</td>
+              <td>申请金额低于门槛时，手续费 = 申请金额 * 手续费率。</td>
+              <td>门槛 100，费率 5%，申请 50，手续费 2.5，到账 47.5。</td>
+            </tr>
+            <tr>
+              <td>冻结金额</td>
+              <td>冻结用户申请金额，而不是实际到账金额。</td>
+              <td>申请 50 时冻结 50。</td>
+            </tr>
+            <tr>
+              <td>累计提现</td>
+              <td>打款成功后累计提现增加实际到账金额。</td>
+              <td>申请 50，到账 47.5，则累计提现增加 47.5。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>13.4 提现地址校验</h3>
+        <ul>
+          <li>TRC20 地址必须以 <code>T</code> 开头并符合 Tron 地址长度和字符规则。</li>
+          <li>ERC20/BEP20 等 EVM 网络地址必须符合 <code>0x</code> 加 40 位十六进制格式。</li>
+          <li>网络名称会标准化后再校验。</li>
+        </ul>
+      </section>
+
+      <section id="admin">
+        <h2>14. 后台运营业务</h2>
+
+        <h3>14.1 后台能力总览</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>后台模块</th>
+              <th>能做什么</th>
+              <th>对前台业务的影响</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>管理员认证与账号</td>
+              <td>后台登录、注册管理员、管理管理员账号、查看登录日志。</td>
+              <td>决定谁能进入后台。</td>
+            </tr>
+            <tr>
+              <td>商品配置</td>
+              <td>维护地区、GPU、商品、AI 模型、周期规则和翻译。</td>
+              <td>影响用户可下单商品、费用、收益和罚金。</td>
+            </tr>
+            <tr>
+              <td>充值审核</td>
+              <td>查看充值订单，审核通过或拒绝。</td>
+              <td>审核通过会给用户钱包入账。</td>
+            </tr>
+            <tr>
+              <td>提现审核</td>
+              <td>查看提现订单，通过、拒绝、确认打款。</td>
+              <td>影响用户冻结资金是否解冻或最终扣减。</td>
+            </tr>
+            <tr>
+              <td>用户与订单查询</td>
+              <td>查看用户、钱包、流水、租赁订单、API 凭证、部署订单、收益、结算、佣金、团队。</td>
+              <td>用于客服、财务、运营核账。</td>
+            </tr>
+            <tr>
+              <td>系统参数</td>
+              <td>维护充值最低金额、提现费率、订单超时等配置。</td>
+              <td>影响关键业务规则。</td>
+            </tr>
+            <tr>
+              <td>定时任务</td>
+              <td>手动触发超时取消、自动暂停、每日收益、到期结算、佣金生成。</td>
+              <td>用于补偿或人工推进业务。</td>
+            </tr>
+            <tr>
+              <td>看板</td>
+              <td>统计用户、资金、订单、收益、佣金等数据。</td>
+              <td>给运营观察整体经营情况。</td>
+            </tr>
+            <tr>
+              <td>内容与消息</td>
+              <td>维护博客、文档、站内消息。</td>
+              <td>影响前台内容和用户通知。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>14.2 用户禁用/启用</h3>
+        <div class="flow">
+          <div class="node"><strong>后台禁用用户</strong><span>app_user.status = DISABLED（禁用）。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>暂停运行订单</strong><span>RUNNING（运行中）订单改 PAUSED（已暂停），profitStatus 改 PAUSED（已暂停）。</span></div>
+          <div class="arrow">→</div>
+          <div class="node money"><strong>关闭运行片段</strong><span>关闭当前 segment，禁用后的时间不再算收益。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>暂停 API</strong><span>ACTIVE（生效中） API 凭证改 PAUSED（已暂停）。</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><strong>记录日志</strong><span>后台操作写 sys_admin_log。</span></div>
+        </div>
+
+        <p>
+          当前业务口径为：用户一旦被后台禁用，不再重新启用。后台启用接口保留但会返回业务错误，不会恢复用户状态、订单或 API。
+        </p>
+
+        <h3>14.3 定时任务</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>任务</th>
+              <th>默认时间/频率</th>
+              <th>作用</th>
+              <th>失败影响</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>部署费超时取消</td>
+              <td>每 10 分钟。</td>
+              <td>取消 PENDING_ACTIVATION（待支付部署费） 且超时未付部署费的订单，退机器费。</td>
+              <td>订单可能长期卡在 PENDING_ACTIVATION（待支付部署费）。</td>
+            </tr>
+            <tr>
+              <td>自动暂停</td>
+              <td>每 5 分钟扫描；自动暂停时间是部署费支付后 24 小时。</td>
+              <td>把 RUNNING（运行中）/ACTIVATING（激活中） 且 autoPauseAt 到期的订单/API 改 PAUSED（已暂停），并关闭当前运行片段。</td>
+              <td>暂停期间不产生收益，但租期继续消耗。</td>
+            </tr>
+            <tr>
+              <td>每日收益</td>
+              <td>每天 00:00。</td>
+              <td>按运行片段给上一自然日有完整运行分钟的订单生成收益并入账，PAUSED（已暂停） 订单的历史运行片段不会漏结。</td>
+              <td>用户收益不到账，佣金也不会生成。</td>
+            </tr>
+            <tr>
+              <td>到期结算</td>
+              <td>每 1 分钟。</td>
+              <td>RUNNING（运行中）/PAUSED（已暂停） 到期后补结未结运行分钟收益，返还本金并置为 EXPIRED（已过期）。</td>
+              <td>订单超过收益期仍未关闭，本金未返还。</td>
+            </tr>
+            <tr>
+              <td>佣金生成</td>
+              <td>每 5 分钟。</td>
+              <td>给已结算收益的上级发佣金。</td>
+              <td>上级佣金延迟或不入账。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="notification">
+        <h2>15. 消息与设备</h2>
+
+        <h3>15.1 站内消息</h3>
+        <p>
+          站内消息支持用户查看列表、查看详情、标记已读和全部已读；后台支持创建单用户消息、广播消息、取消或删除消息，并支持翻译内容。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>消息状态</th>
+              <th>说明</th>
+              <th>触发</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>UNREAD（未读）</td>
+              <td>未读。</td>
+              <td>消息创建后默认未读。</td>
+            </tr>
+            <tr>
+              <td>READ（已读）</td>
+              <td>已读。</td>
+              <td>用户查看详情、标记单条已读或全部已读。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="risk">
+          <strong>下一期范围：</strong>通知业务类型包含充值成功、提现成功、提现拒绝、收益成功、佣金成功、API 激活、订单取消、订单到期、博客更新等；当前核心业务流程暂不实现自动通知，消息中心本期主要作为后台手动创建/广播能力。
+        </div>
+
+        <h3>15.2 推送设备</h3>
+        <p>
+          用户可以注册或注销推送设备。设备按 deviceToken 唯一，注册时记录设备类型、用户、启用状态和最后活跃时间；注销时改为 DISABLED（禁用）。当前未看到实际调用第三方推送服务发送消息的流程。
+        </p>
+      </section>
+
+      <section id="content">
+        <h2>16. 内容业务</h2>
+
+        <h3>16.1 博客</h3>
+        <div class="flow">
+          <div class="node"><strong>DRAFT（草稿）</strong><span>后台创建草稿，前台不可见。</span></div>
+          <div class="arrow">→</div>
+          <div class="node green"><strong>PUBLISHED（已发布）</strong><span>发布后前台可见，详情会增加浏览量。</span></div>
+          <div class="arrow">→</div>
+          <div class="node warn"><strong>OFFLINE（离线）</strong><span>下线后前台不可见。</span></div>
+        </div>
+        <p>
+          博客支持分类、标签、文章、翻译。前台只展示已发布内容，后台可以发布、下线、删除。删除是实际删除，不是仅改状态。
+        </p>
+
+        <h3>16.2 文档</h3>
+        <p>
+          文档按语言和栏目组织，栏目包含指南、集成、FAQ、支持等。文档分类有树结构，文章支持 slug、搜索、发布、下线和翻译。同一语言和栏目下只能有一个已发布的首页文档。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>文档状态</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>DRAFT（草稿）</td>
+              <td>草稿，前台不可见。</td>
+            </tr>
+            <tr>
+              <td>PUBLISHED（已发布）</td>
+              <td>已发布，前台可见。</td>
+            </tr>
+            <tr>
+              <td>OFFLINE（离线）</td>
+              <td>已下线，前台不可见。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="note">
+          内容业务目前主要独立于资金和订单业务。博客更新存在通知类型枚举，但发布博客自动推送通知归入下一期，不影响本期资金和订单闭环。
+        </div>
+      </section>
+
+      <section id="status">
+        <h2>17. 状态字典</h2>
+
+        <h3>17.1 通用状态</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>枚举</th>
+              <th>值</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>ENABLED（启用）</td><td>1</td><td>启用，可被前台使用。</td></tr>
+            <tr><td>DISABLED（禁用）</td><td>0</td><td>禁用，不应被前台正常使用。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>17.2 租赁订单状态</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>是否主流程使用</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>PENDING_PAY（待支付）</td><td>是</td><td>待支付机器费。</td></tr>
+            <tr><td>PAID（已支付）</td><td>保留</td><td>枚举存在，当前主流程未使用。</td></tr>
+            <tr><td>PENDING_ACTIVATION（待支付部署费）</td><td>是</td><td>机器费已付，等待部署费。</td></tr>
+            <tr><td>ACTIVATING（激活中）</td><td>保留/兼容</td><td>当前主流程部署费支付后直接 RUNNING（运行中）。</td></tr>
+            <tr><td>PAUSED（已暂停）</td><td>是</td><td>已暂停，暂停期间不产收益但租期继续消耗，用户可启动或提前结算。</td></tr>
+            <tr><td>RUNNING（运行中）</td><td>是</td><td>运行中，可产生每日收益。</td></tr>
+            <tr><td>EXPIRED（已过期）</td><td>是</td><td>到期结束。</td></tr>
+            <tr><td>SETTLING（结算中）</td><td>短暂使用</td><td>结算过程中临时状态。</td></tr>
+            <tr><td>SETTLED（已结算）</td><td>保留</td><td>枚举存在，当前主流程未使用。</td></tr>
+            <tr><td>EARLY_CLOSED（提前关闭）</td><td>是</td><td>提前结算结束。</td></tr>
+            <tr><td>CANCELED（已取消）</td><td>是</td><td>取消结束。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>17.3 API 凭证状态</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>进入触发</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>GENERATED（已生成）</td><td>支付机器费成功。</td><td>凭证已生成，等待支付部署费。</td></tr>
+            <tr><td>ACTIVATING（激活中）</td><td>保留/兼容状态。</td><td>当前主流程支付部署费后直接 ACTIVE（生效中）。</td></tr>
+            <tr><td>PAUSED（已暂停）</td><td>自动暂停任务或后台禁用用户。</td><td>API 暂停。</td></tr>
+            <tr><td>ACTIVE（生效中）</td><td>支付部署费成功；或用户重新启动订单。</td><td>API 可用。</td></tr>
+            <tr><td>EXPIRED（已过期）</td><td>订单到期结算。</td><td>API 到期。</td></tr>
+            <tr><td>REVOKED（已撤销）</td><td>订单取消或提前结算。</td><td>API 作废。</td></tr>
+          </tbody>
+        </table>
+
+        <h3>17.4 资金类状态</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>业务</th>
+              <th>状态</th>
+              <th>闭环</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>充值</td><td>SUBMITTED（已提交）、APPROVED（已审核通过）、REJECTED（已拒绝）、CANCELED（已取消）</td><td>APPROVED（已审核通过） 入账；REJECTED（已拒绝）/CANCELED（已取消） 不入账。</td></tr>
+            <tr><td>提现</td><td>PENDING_REVIEW（待审核）、APPROVED（已审核通过）、PAID（已支付）、REJECTED（已拒绝）、CANCELED（已取消）</td><td>PAID（已支付） 扣冻结；REJECTED（已拒绝）/CANCELED（已取消） 解冻。</td></tr>
+            <tr><td>收益记录</td><td>PENDING（待处理）、SETTLED（已结算）、CANCELED（已取消）</td><td>SETTLED（已结算） 入账；CANCELED（已取消） 当前未见主流程使用。</td></tr>
+            <tr><td>佣金记录</td><td>PENDING（待处理）、SETTLED（已结算）、CANCELED（已取消）</td><td>SETTLED（已结算） 入账；CANCELED（已取消） 当前未见主流程使用。</td></tr>
+            <tr><td>结算单</td><td>PENDING（待处理）、SETTLED（已结算）、REJECTED（已拒绝）、CANCELED（已取消）</td><td>当前到期/提前结算直接 SETTLED（已结算）。</td></tr>
+            <tr><td>部署订单</td><td>PENDING_PAY（待支付）、PAID（已支付）、CANCELED（已取消）、REFUNDED（已退款）</td><td>当前创建后直接扣款并 PAID（已支付）。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="risks">
+        <h2>18. 上线校准清单</h2>
+        <p>
+          以下是从代码实现反推出来的产品校准点。建议产品、后端、测试、运营一起逐项确认：如果符合需求，就写入上线口径；如果不符合，需要排期调整。
+        </p>
+
+        <ol class="checklist">
+          <li>
+            <strong>商品库存与可租日期：</strong>已确认当前只作为展示/运营参考，不参与下单交易校验；下单只校验商品、AI 模型、周期是否启用。
+          </li>
+          <li>
+            <strong>自动暂停业务口径：</strong>用户支付部署费后订单立即 RUNNING（运行中） 并开始租期，24 小时后自动 PAUSED（已暂停）。暂停期间不产生收益但租期继续消耗，这是已确认的平台粘性机制。
+          </li>
+          <li>
+            <strong>每日收益分钟口径：</strong>当前已按完整分钟结算上一自然日收益，不足 1 分钟不计；需要前端和用户说明同步“预估日收益是 1440 分钟完整日收益，实际按有效分钟折算”。
+          </li>
+          <li>
+            <strong>结算审核缺失：</strong>结算单有待处理、拒绝、取消状态，但实际流程直接 SETTLED（已结算）。若运营需要审核结算，当前未实现。
+          </li>
+          <li>
+            <strong>人工结算缺失：</strong>结算类型有 MANUAL（人工处理），但当前未看到人工结算入口。异常订单如何结算需要明确。
+          </li>
+          <li>
+            <strong>部署订单取消/退款：</strong>当前期排除。部署订单本期只走 PENDING_PAY（待支付）→ PAID（已支付），CANCELED（已取消）/REFUNDED（已退款） 暂不实现业务路径。
+          </li>
+          <li>
+            <strong>自动通知：</strong>下一期实现。本期不要求收益、佣金、订单到期等业务事件自动发通知。
+          </li>
+          <li>
+            <strong>禁用用户后的业务处理：</strong>已闭环。禁用会暂停 RUNNING（运行中）订单、关闭运行片段并暂停 ACTIVE（生效中）API；旧 JWT 会被后端实时拒绝；用户禁用后不可重新启用。
+          </li>
+          <li>
+            <strong>充值模式：</strong>当前是人工审核入账，未看到链上自动确认或支付回调。需要确认运营审核工作量和到账时效。
+          </li>
+          <li>
+            <strong>提现手续费口径：</strong>申请金额达到免手续费门槛时手续费为 0，未达到则按申请金额乘费率。累计提现统计实际到账金额，不含手续费。
+          </li>
+          <li>
+            <strong>提现打款责任边界：</strong>系统只在管理员确认 PAID（已支付） 后扣冻结余额，实际链上打款是否成功依赖管理员录入和外部流程。
+          </li>
+          <li>
+            <strong>代理层级已调整为二级：</strong>当前邀请关系、团队关系、佣金规则、用户查询和后台查询都只保留一级、二级。若历史库里存在三级团队或三级佣金数据，需要确认迁移、隐藏、历史账务展示和钱包累计佣金口径。
+          </li>
+          <li>
+            <strong>后台调账：</strong>钱包业务类型有 ADJUST（调账），但未看到人工调账接口。若需要财务纠错能力，需要补审批和审计。
+          </li>
+          <li>
+            <strong>API token 展示：</strong>已确认 API Token 仅作为页面模拟凭证展示。系统保存加密 token 和脱敏 token，前台只展示脱敏信息，不向用户交付可复制调用的明文 token。
+          </li>
+          <li>
+            <strong>初始化数据风险：</strong>若商品 token 产出、AI token 单价或部署费配置为 0，则预计收益、每日收益或部署费会是 0。上线前必须核查生产配置。
+          </li>
+          <li>
+            <strong>定时任务监控：</strong>收益、佣金、自动暂停、到期结算都依赖任务执行。需要上线监控和失败补偿 SOP。
+          </li>
+        </ol>
+
+        <h3>18.1 建议产品校准会议顺序</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>顺序</th>
+              <th>主题</th>
+              <th>建议参与人</th>
+              <th>输出结论</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>商品售卖规则</td>
+              <td>产品、运营、后端、测试</td>
+              <td>已确认库存和可租日期仅展示；交易只校验启用状态和价格快照。</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>租赁订单生命周期</td>
+              <td>产品、后端、测试</td>
+              <td>每个状态是否符合需求，哪些状态允许用户取消或退款。</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>收益与结算口径</td>
+              <td>产品、财务、后端、测试</td>
+              <td>收益日期、收益金额、到期本金返还、提前罚金、人工结算。</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>充值提现财务流程</td>
+              <td>产品、财务、运营、后端</td>
+              <td>审核职责、到账时间、手续费、异常处理、链上凭证规则。</td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>邀请佣金</td>
+              <td>产品、运营、后端</td>
+              <td>佣金来源、一级/二级范围、比例、发放时间、异常追回规则。</td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>消息与运营后台</td>
+              <td>产品、运营、客服、后端</td>
+              <td>自动通知进入下一期；本期确认后台手动消息和看板是否满足运营使用。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="success">
+          <strong>上线校准目标：</strong>每一条业务状态都要能回答四个问题：谁触发、触发条件是什么、资金是否变化、失败或异常时怎么补偿。只要有一个问题答不上来，就应该视为上线前待确认项。
+        </div>
+      </section>
+
+      <section>
+        <h2>附录：本手册的边界</h2>
+        <ul>
+          <li>本手册基于当前后端代码、数据库表和枚举静态分析，不代表真实生产数据配置。</li>
+          <li>本手册没有修改任何后端接口、数据库结构或业务代码。</li>
+          <li>本手册用于产品校准和测试用例设计，不替代财务审计、风控审计或安全渗透测试。</li>
+          <li>若后续代码变化，尤其是订单、钱包、收益、提现相关改动，本手册需要同步更新。</li>
+        </ul>
+        <p class="small">文件名：业务手册.html；建议产品评审时直接用浏览器打开本文件。</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
