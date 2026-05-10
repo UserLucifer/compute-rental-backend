@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.compute.rental.common.enums.ApiTokenStatus;
+import com.compute.rental.common.enums.CommonStatus;
 import com.compute.rental.common.enums.ErrorCode;
 import com.compute.rental.common.enums.ProfitStatus;
 import com.compute.rental.common.enums.RentalOrderStatus;
+import com.compute.rental.common.enums.RecordSettleStatus;
 import com.compute.rental.common.enums.RunSegmentCloseReason;
 import com.compute.rental.common.exception.BusinessException;
 import com.compute.rental.common.page.PageResult;
@@ -33,7 +35,13 @@ import com.compute.rental.modules.system.dto.AdminProfitRecordResponse;
 import com.compute.rental.modules.system.dto.AdminRentalOrderDetailResponse;
 import com.compute.rental.modules.system.dto.AdminRentalOrderResponse;
 import com.compute.rental.modules.system.dto.AdminSettlementOrderResponse;
+import com.compute.rental.modules.system.dto.AdminTeamLeaderboardRow;
+import com.compute.rental.modules.system.dto.AdminTeamListRow;
+import com.compute.rental.modules.system.dto.AdminTeamMemberRow;
+import com.compute.rental.modules.system.dto.AdminTeamOverviewResponse;
 import com.compute.rental.modules.system.dto.AdminTeamRelationResponse;
+import com.compute.rental.modules.system.dto.AdminTeamTreeNode;
+import com.compute.rental.modules.system.dto.AdminTeamUserSummaryResponse;
 import com.compute.rental.modules.system.dto.AdminUserResponse;
 import com.compute.rental.modules.system.dto.AdminUserTeamResponse;
 import com.compute.rental.modules.system.dto.AdminWalletResponse;
@@ -49,12 +57,18 @@ import com.compute.rental.modules.wallet.entity.UserWallet;
 import com.compute.rental.modules.wallet.entity.WalletTransaction;
 import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
 import com.compute.rental.modules.wallet.mapper.WalletTransactionMapper;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -63,6 +77,12 @@ import org.springframework.util.StringUtils;
 public class AdminBusinessQueryService {
 
     private static final int MAX_HIERARCHY_LEVEL = 2;
+    private static final String CURRENCY_USDT = "USDT";
+    private static final String ORDER_STATUS_NONE = "NONE";
+    private static final Set<String> ACTIVE_ORDER_STATUSES = Set.of(
+            RentalOrderStatus.RUNNING.name(),
+            RentalOrderStatus.PAUSED.name()
+    );
 
     private final AppUserMapper appUserMapper;
     private final UserWalletMapper userWalletMapper;
@@ -499,6 +519,149 @@ public class AdminBusinessQueryService {
         return commissionRecordResponse(record, userName(record.getSourceUserId()));
     }
 
+    public AdminTeamOverviewResponse adminTeamOverview(LocalDateTime startTime, LocalDateTime endTime) {
+        var today = DateTimeUtils.today();
+        var startAt = startTime == null ? today.atStartOfDay() : startTime;
+        var endAt = endTime == null ? today.plusDays(1).atStartOfDay() : endTime;
+        return new AdminTeamOverviewResponse(
+                activeTeamCount(),
+                estimatedCommissionAmount(startAt, endAt),
+                CURRENCY_USDT,
+                null,
+                null);
+    }
+
+    public PageResult<AdminTeamListRow> pageAdminTeamList(
+            long pageNo,
+            long pageSize,
+            String keyword,
+            Integer status,
+            String sortBy
+    ) {
+        var current = normalizePageNo(pageNo);
+        var size = normalizePageSize(pageSize, 100);
+        var aggregates = adminTeamAggregates(keyword, status);
+        aggregates.sort(teamListComparator(sortBy));
+        var pageRecords = slice(aggregates, current, size).stream()
+                .map(this::adminTeamListRow)
+                .toList();
+        return new PageResult<>(pageRecords, aggregates.size(), current, size);
+    }
+
+    public PageResult<AdminTeamLeaderboardRow> pageAdminTeamLeaderboard(
+            long pageNo,
+            long pageSize,
+            String sortBy
+    ) {
+        var current = normalizePageNo(pageNo);
+        var size = normalizePageSize(pageSize, 100);
+        var aggregates = adminTeamAggregates(null, null);
+        aggregates.sort(teamLeaderboardComparator(sortBy));
+        var fromIndex = pageStartIndex(aggregates.size(), current, size);
+        var toIndex = pageEndIndex(aggregates.size(), fromIndex, size);
+        var records = new ArrayList<AdminTeamLeaderboardRow>();
+        for (var index = fromIndex; index < toIndex; index++) {
+            records.add(adminTeamLeaderboardRow(aggregates.get(index), index + 1L));
+        }
+        return new PageResult<>(records, aggregates.size(), current, size);
+    }
+
+    public AdminTeamUserSummaryResponse adminTeamUserSummary(Long userId) {
+        var user = requireUser(userId);
+        var aggregate = adminTeamAggregateMap(List.of(userId))
+                .getOrDefault(userId, emptyAdminTeamAggregate(user));
+        return adminTeamUserSummaryResponse(aggregate);
+    }
+
+    public PageResult<AdminTeamTreeNode> pageAdminTeamChildren(
+            Long rootUserId,
+            Long parentUserId,
+            long pageNo,
+            long pageSize
+    ) {
+        requireUser(rootUserId);
+        requireUser(parentUserId);
+        var current = normalizePageNo(pageNo);
+        var size = normalizePageSize(pageSize, 100);
+        Integer parentDepth = rootUserId.equals(parentUserId) ? Integer.valueOf(0)
+                : relationDepth(rootUserId, parentUserId);
+        if (parentDepth == null || parentDepth >= MAX_HIERARCHY_LEVEL) {
+            return new PageResult<>(Collections.emptyList(), 0, current, size);
+        }
+
+        var page = new Page<UserTeamRelation>(current, size);
+        var result = teamRelationMapper.selectPage(page, new LambdaQueryWrapper<UserTeamRelation>()
+                .eq(UserTeamRelation::getAncestorUserId, parentUserId)
+                .eq(UserTeamRelation::getLevelDepth, 1)
+                .orderByDesc(UserTeamRelation::getId));
+        var relations = result.getRecords();
+        var childIds = relations.stream().map(UserTeamRelation::getDescendantUserId).toList();
+        var users = appUserMap(childIds);
+        var counts = teamCountsByAncestor(selectRelationsForAncestors(childIds));
+        var totalContribution = settledContributionBySource(rootUserId, childIds, null, null);
+        var yesterdayContribution = settledContributionBySource(rootUserId, childIds, yesterdayStart(),
+                todayStart());
+        var childDepth = parentDepth + 1;
+        var nodes = relations.stream()
+                .map(relation -> adminTeamTreeNode(
+                        relation.getDescendantUserId(),
+                        users.get(relation.getDescendantUserId()),
+                        parentUserId,
+                        childDepth,
+                        counts.getOrDefault(relation.getDescendantUserId(), TeamCounts.ZERO),
+                        totalContribution.getOrDefault(relation.getDescendantUserId(), BigDecimal.ZERO),
+                        yesterdayContribution.getOrDefault(relation.getDescendantUserId(), BigDecimal.ZERO)))
+                .toList();
+        return new PageResult<>(nodes, result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
+    public PageResult<AdminTeamMemberRow> pageAdminTeamMembers(
+            Long ancestorUserId,
+            long pageNo,
+            long pageSize,
+            Integer levelDepth,
+            String keyword
+    ) {
+        requireUser(ancestorUserId);
+        var current = normalizePageNo(pageNo);
+        var size = normalizePageSize(pageSize, 100);
+        if (unsupportedLevel(levelDepth)) {
+            return new PageResult<>(Collections.emptyList(), 0, current, size);
+        }
+        var matchedUserIds = userIdsByAdminKeyword(keyword);
+        if (hasText(keyword) && matchedUserIds.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0, current, size);
+        }
+
+        var page = new Page<UserTeamRelation>(current, size);
+        var wrapper = new LambdaQueryWrapper<UserTeamRelation>()
+                .eq(UserTeamRelation::getAncestorUserId, ancestorUserId)
+                .le(UserTeamRelation::getLevelDepth, MAX_HIERARCHY_LEVEL)
+                .eq(levelDepth != null, UserTeamRelation::getLevelDepth, levelDepth)
+                .in(!matchedUserIds.isEmpty(), UserTeamRelation::getDescendantUserId, matchedUserIds)
+                .orderByAsc(UserTeamRelation::getLevelDepth)
+                .orderByDesc(UserTeamRelation::getId);
+        var result = teamRelationMapper.selectPage(page, wrapper);
+        var relations = result.getRecords();
+        var descendantIds = relations.stream().map(UserTeamRelation::getDescendantUserId).toList();
+        var users = appUserMap(descendantIds);
+        var parentIds = directParentIdsByDescendant(descendantIds);
+        var orderBriefs = activeOrderBriefByUser(descendantIds);
+        var totalContribution = settledContributionBySource(ancestorUserId, descendantIds, null, null);
+        var yesterdayContribution = settledContributionBySource(ancestorUserId, descendantIds, yesterdayStart(),
+                todayStart());
+        var records = relations.stream()
+                .map(relation -> adminTeamMemberRow(
+                        relation,
+                        users.get(relation.getDescendantUserId()),
+                        parentIds.getOrDefault(relation.getDescendantUserId(), ancestorUserId),
+                        orderBriefs.getOrDefault(relation.getDescendantUserId(), TeamOrderBrief.none()),
+                        totalContribution.getOrDefault(relation.getDescendantUserId(), BigDecimal.ZERO),
+                        yesterdayContribution.getOrDefault(relation.getDescendantUserId(), BigDecimal.ZERO)))
+                .toList();
+        return new PageResult<>(records, result.getTotal(), result.getCurrent(), result.getSize());
+    }
+
     public PageResult<AdminTeamRelationResponse> pageTeamRelations(
             long pageNo,
             long pageSize,
@@ -582,6 +745,408 @@ public class AdminBusinessQueryService {
         return user;
     }
 
+    private long activeTeamCount() {
+        var relations = selectTwoLevelRelations();
+        if (relations.isEmpty()) {
+            return 0;
+        }
+        var descendantIds = relations.stream().map(UserTeamRelation::getDescendantUserId).toList();
+        var enabledUserIds = new HashSet<Long>();
+        for (var user : appUserMap(descendantIds).values()) {
+            if (Integer.valueOf(CommonStatus.ENABLED.value()).equals(user.getStatus())) {
+                enabledUserIds.add(user.getId());
+            }
+        }
+        var activeAncestorIds = new HashSet<Long>();
+        for (var relation : relations) {
+            if (enabledUserIds.contains(relation.getDescendantUserId())) {
+                activeAncestorIds.add(relation.getAncestorUserId());
+            }
+        }
+        return activeAncestorIds.size();
+    }
+
+    private BigDecimal estimatedCommissionAmount(LocalDateTime startAt, LocalDateTime endAt) {
+        var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
+                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
+                .ne(CommissionRecord::getStatus, RecordSettleStatus.CANCELED.name())
+                .ge(startAt != null, CommissionRecord::getCreatedAt, startAt)
+                .lt(endAt != null, CommissionRecord::getCreatedAt, endAt));
+        return sumCommissionAmount(records);
+    }
+
+    private List<AdminTeamAggregate> adminTeamAggregates(String keyword, Integer status) {
+        var candidateIds = teamAncestorIds();
+        if (candidateIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        if (hasText(keyword)) {
+            candidateIds.retainAll(userIdsByAdminKeyword(keyword));
+            if (candidateIds.isEmpty()) {
+                return new ArrayList<>();
+            }
+        }
+
+        var aggregates = new ArrayList<>(adminTeamAggregateMap(candidateIds).values());
+        if (status != null) {
+            aggregates.removeIf(aggregate -> !status.equals(aggregate.user().getStatus()));
+        }
+        return aggregates;
+    }
+
+    private Map<Long, AdminTeamAggregate> adminTeamAggregateMap(Collection<Long> userIds) {
+        var ids = distinctIds(userIds);
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        var users = appUserMap(ids);
+        var relations = selectRelationsForAncestors(ids);
+        var counts = teamCountsByAncestor(relations);
+        var orderStats = teamOrderStatsByAncestor(relations);
+        var totalCommission = settledCommissionByBenefit(ids, null, null);
+        var yesterdayCommission = settledCommissionByBenefit(ids, yesterdayStart(), todayStart());
+        var lastCommissionAt = lastCommissionAtByBenefit(ids);
+        var result = new HashMap<Long, AdminTeamAggregate>();
+        for (var id : ids) {
+            var user = users.get(id);
+            if (user == null) {
+                continue;
+            }
+            result.put(id, new AdminTeamAggregate(
+                    user,
+                    counts.getOrDefault(id, TeamCounts.ZERO),
+                    yesterdayCommission.getOrDefault(id, BigDecimal.ZERO),
+                    totalCommission.getOrDefault(id, BigDecimal.ZERO),
+                    orderStats.getOrDefault(id, TeamOrderStats.ZERO),
+                    lastCommissionAt.get(id)));
+        }
+        return result;
+    }
+
+    private AdminTeamAggregate emptyAdminTeamAggregate(AppUser user) {
+        return new AdminTeamAggregate(
+                user,
+                TeamCounts.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                TeamOrderStats.ZERO,
+                null);
+    }
+
+    private Set<Long> teamAncestorIds() {
+        var ancestorIds = new HashSet<Long>();
+        for (var relation : selectTwoLevelRelations()) {
+            ancestorIds.add(relation.getAncestorUserId());
+        }
+        return ancestorIds;
+    }
+
+    private List<UserTeamRelation> selectTwoLevelRelations() {
+        return teamRelationMapper.selectList(new LambdaQueryWrapper<UserTeamRelation>()
+                .le(UserTeamRelation::getLevelDepth, MAX_HIERARCHY_LEVEL));
+    }
+
+    private List<UserTeamRelation> selectRelationsForAncestors(Collection<Long> ancestorIds) {
+        var ids = distinctIds(ancestorIds);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return teamRelationMapper.selectList(new LambdaQueryWrapper<UserTeamRelation>()
+                .in(UserTeamRelation::getAncestorUserId, ids)
+                .le(UserTeamRelation::getLevelDepth, MAX_HIERARCHY_LEVEL));
+    }
+
+    private Integer relationDepth(Long ancestorUserId, Long descendantUserId) {
+        var relation = teamRelationMapper.selectOne(new LambdaQueryWrapper<UserTeamRelation>()
+                .eq(UserTeamRelation::getAncestorUserId, ancestorUserId)
+                .eq(UserTeamRelation::getDescendantUserId, descendantUserId)
+                .le(UserTeamRelation::getLevelDepth, MAX_HIERARCHY_LEVEL)
+                .last("LIMIT 1"));
+        return relation == null ? null : relation.getLevelDepth();
+    }
+
+    private Map<Long, TeamCounts> teamCountsByAncestor(List<UserTeamRelation> relations) {
+        var result = new HashMap<Long, TeamCounts>();
+        for (var relation : relations) {
+            var current = result.getOrDefault(relation.getAncestorUserId(), TeamCounts.ZERO);
+            if (Integer.valueOf(1).equals(relation.getLevelDepth())) {
+                result.put(relation.getAncestorUserId(),
+                        new TeamCounts(current.directCount() + 1, current.indirectCount()));
+            } else if (Integer.valueOf(2).equals(relation.getLevelDepth())) {
+                result.put(relation.getAncestorUserId(),
+                        new TeamCounts(current.directCount(), current.indirectCount() + 1));
+            }
+        }
+        return result;
+    }
+
+    private Map<Long, TeamOrderStats> teamOrderStatsByAncestor(List<UserTeamRelation> relations) {
+        if (relations.isEmpty()) {
+            return Map.of();
+        }
+        var ancestorsByDescendant = new HashMap<Long, Set<Long>>();
+        for (var relation : relations) {
+            ancestorsByDescendant.computeIfAbsent(relation.getDescendantUserId(), ignored -> new HashSet<>())
+                    .add(relation.getAncestorUserId());
+        }
+        var orders = selectActiveOrders(ancestorsByDescendant.keySet());
+        var result = new HashMap<Long, TeamOrderStats>();
+        for (var order : orders) {
+            var ancestorIds = ancestorsByDescendant.get(order.getUserId());
+            if (ancestorIds == null) {
+                continue;
+            }
+            var running = RentalOrderStatus.RUNNING.name().equals(order.getOrderStatus());
+            for (var ancestorId : ancestorIds) {
+                var current = result.getOrDefault(ancestorId, TeamOrderStats.ZERO);
+                result.put(ancestorId, new TeamOrderStats(
+                        current.activeOrderCount() + 1,
+                        current.runningOrderCount() + (running ? 1 : 0)));
+            }
+        }
+        return result;
+    }
+
+    private List<RentalOrder> selectActiveOrders(Collection<Long> userIds) {
+        var ids = distinctIds(userIds);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return rentalOrderMapper.selectList(new LambdaQueryWrapper<RentalOrder>()
+                .in(RentalOrder::getUserId, ids)
+                .in(RentalOrder::getOrderStatus, ACTIVE_ORDER_STATUSES)
+                .orderByDesc(RentalOrder::getId));
+    }
+
+    private Map<Long, TeamOrderBrief> activeOrderBriefByUser(Collection<Long> userIds) {
+        var result = new HashMap<Long, TeamOrderBrief>();
+        for (var order : selectActiveOrders(userIds)) {
+            var current = result.get(order.getUserId());
+            if (RentalOrderStatus.RUNNING.name().equals(order.getOrderStatus())) {
+                if (current == null || !RentalOrderStatus.RUNNING.name().equals(current.orderStatus())) {
+                    result.put(order.getUserId(), new TeamOrderBrief(RentalOrderStatus.RUNNING.name(),
+                            order.getOrderNo()));
+                }
+            } else if (current == null) {
+                result.put(order.getUserId(), new TeamOrderBrief(RentalOrderStatus.PAUSED.name(), order.getOrderNo()));
+            }
+        }
+        return result;
+    }
+
+    private Map<Long, BigDecimal> settledCommissionByBenefit(
+            Collection<Long> benefitUserIds,
+            LocalDateTime startAt,
+            LocalDateTime endAt
+    ) {
+        var ids = distinctIds(benefitUserIds);
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
+                .in(CommissionRecord::getBenefitUserId, ids)
+                .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name())
+                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
+                .ge(startAt != null, CommissionRecord::getSettledAt, startAt)
+                .lt(endAt != null, CommissionRecord::getSettledAt, endAt));
+        var result = new HashMap<Long, BigDecimal>();
+        for (var record : records) {
+            result.merge(record.getBenefitUserId(), nullToZero(record.getCommissionAmount()), BigDecimal::add);
+        }
+        return result;
+    }
+
+    private Map<Long, BigDecimal> settledContributionBySource(
+            Long benefitUserId,
+            Collection<Long> sourceUserIds,
+            LocalDateTime startAt,
+            LocalDateTime endAt
+    ) {
+        var ids = distinctIds(sourceUserIds);
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
+                .eq(CommissionRecord::getBenefitUserId, benefitUserId)
+                .in(CommissionRecord::getSourceUserId, ids)
+                .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name())
+                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
+                .ge(startAt != null, CommissionRecord::getSettledAt, startAt)
+                .lt(endAt != null, CommissionRecord::getSettledAt, endAt));
+        var result = new HashMap<Long, BigDecimal>();
+        for (var record : records) {
+            result.merge(record.getSourceUserId(), nullToZero(record.getCommissionAmount()), BigDecimal::add);
+        }
+        return result;
+    }
+
+    private Map<Long, LocalDateTime> lastCommissionAtByBenefit(Collection<Long> benefitUserIds) {
+        var ids = distinctIds(benefitUserIds);
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        var records = commissionRecordMapper.selectList(new LambdaQueryWrapper<CommissionRecord>()
+                .in(CommissionRecord::getBenefitUserId, ids)
+                .eq(CommissionRecord::getStatus, RecordSettleStatus.SETTLED.name())
+                .le(CommissionRecord::getLevelNo, MAX_HIERARCHY_LEVEL)
+                .isNotNull(CommissionRecord::getSettledAt));
+        var result = new HashMap<Long, LocalDateTime>();
+        for (var record : records) {
+            result.merge(record.getBenefitUserId(), record.getSettledAt(),
+                    (first, second) -> first.isAfter(second) ? first : second);
+        }
+        return result;
+    }
+
+    private Map<Long, Long> directParentIdsByDescendant(Collection<Long> descendantUserIds) {
+        var ids = distinctIds(descendantUserIds);
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        var relations = teamRelationMapper.selectList(new LambdaQueryWrapper<UserTeamRelation>()
+                .in(UserTeamRelation::getDescendantUserId, ids)
+                .eq(UserTeamRelation::getLevelDepth, 1));
+        var result = new HashMap<Long, Long>();
+        for (var relation : relations) {
+            result.putIfAbsent(relation.getDescendantUserId(), relation.getAncestorUserId());
+        }
+        return result;
+    }
+
+    private Map<Long, AppUser> appUserMap(Collection<Long> userIds) {
+        var ids = distinctIds(userIds);
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        var users = new HashMap<Long, AppUser>();
+        for (var user : appUserMapper.selectBatchIds(ids)) {
+            users.put(user.getId(), user);
+        }
+        return users;
+    }
+
+    private List<Long> userIdsByAdminKeyword(String keyword) {
+        var normalized = AppUserSearchSupport.normalize(keyword);
+        if (!AppUserSearchSupport.hasText(normalized)) {
+            return Collections.emptyList();
+        }
+        var internalId = parseLong(normalized);
+        var wrapper = new LambdaQueryWrapper<AppUser>()
+                .select(AppUser::getId)
+                .and(userWrapper -> {
+                    userWrapper.eq(AppUser::getUserId, normalized)
+                            .or()
+                            .eq(AppUser::getEmail, normalized)
+                            .or()
+                            .likeRight(AppUser::getUserName, normalized)
+                            .or()
+                            .likeRight(AppUser::getEmail, normalized);
+                    if (internalId != null) {
+                        userWrapper.or().eq(AppUser::getId, internalId);
+                    }
+                });
+        return appUserMapper.selectList(wrapper).stream().map(AppUser::getId).toList();
+    }
+
+    private Long parseLong(String value) {
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private Comparator<AdminTeamAggregate> teamListComparator(String sortBy) {
+        return switch (sortBy == null ? "" : sortBy) {
+            case "totalCommission" -> teamCommissionComparator(AdminTeamAggregate::totalCommission);
+            case "yesterdayCommission" -> teamCommissionComparator(AdminTeamAggregate::yesterdayCommission);
+            case "directCount" -> Comparator.comparingLong(
+                    (AdminTeamAggregate aggregate) -> aggregate.counts().directCount()).reversed()
+                    .thenComparing(teamUserIdDescComparator());
+            default -> Comparator.comparing(
+                            AdminTeamAggregate::lastCommissionAt,
+                            Comparator.nullsFirst(Comparator.naturalOrder()))
+                    .reversed()
+                    .thenComparing(teamUserIdDescComparator());
+        };
+    }
+
+    private Comparator<AdminTeamAggregate> teamLeaderboardComparator(String sortBy) {
+        return switch (sortBy == null ? "" : sortBy) {
+            case "yesterdayCommission" -> teamCommissionComparator(AdminTeamAggregate::yesterdayCommission);
+            case "directCount" -> Comparator.comparingLong(
+                    (AdminTeamAggregate aggregate) -> aggregate.counts().directCount()).reversed()
+                    .thenComparing(teamUserIdDescComparator());
+            default -> teamCommissionComparator(AdminTeamAggregate::totalCommission);
+        };
+    }
+
+    private Comparator<AdminTeamAggregate> teamCommissionComparator(
+            java.util.function.Function<AdminTeamAggregate, BigDecimal> amountExtractor
+    ) {
+        return Comparator.comparing(amountExtractor).reversed().thenComparing(teamUserIdDescComparator());
+    }
+
+    private Comparator<AdminTeamAggregate> teamUserIdDescComparator() {
+        return Comparator.comparing(AdminTeamAggregate::userId).reversed();
+    }
+
+    private LocalDateTime yesterdayStart() {
+        return DateTimeUtils.today().minusDays(1).atStartOfDay();
+    }
+
+    private LocalDateTime todayStart() {
+        return DateTimeUtils.today().atStartOfDay();
+    }
+
+    private long normalizePageNo(long pageNo) {
+        return Math.max(1, pageNo);
+    }
+
+    private long normalizePageSize(long pageSize, long maxPageSize) {
+        return Math.min(Math.max(1, pageSize), maxPageSize);
+    }
+
+    private int pageStartIndex(int total, long pageNo, long pageSize) {
+        var start = (pageNo - 1) * pageSize;
+        return (int) Math.min(start, total);
+    }
+
+    private int pageEndIndex(int total, int fromIndex, long pageSize) {
+        return (int) Math.min(fromIndex + pageSize, total);
+    }
+
+    private <T> List<T> slice(List<T> records, long pageNo, long pageSize) {
+        var fromIndex = pageStartIndex(records.size(), pageNo, pageSize);
+        var toIndex = pageEndIndex(records.size(), fromIndex, pageSize);
+        return records.subList(fromIndex, toIndex);
+    }
+
+    private Set<Long> distinctIds(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return new HashSet<>();
+        }
+        var result = new HashSet<Long>();
+        for (var id : ids) {
+            if (id != null) {
+                result.add(id);
+            }
+        }
+        return result;
+    }
+
+    private BigDecimal sumCommissionAmount(List<CommissionRecord> records) {
+        var result = BigDecimal.ZERO;
+        for (var record : records) {
+            result = result.add(nullToZero(record.getCommissionAmount()));
+        }
+        return result;
+    }
+
+    private BigDecimal nullToZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
     private Long resolveOrderId(String orderNo) {
         if (!hasText(orderNo)) {
             return null;
@@ -590,6 +1155,115 @@ public class AdminBusinessQueryService {
                 .eq(RentalOrder::getOrderNo, orderNo)
                 .last("LIMIT 1"));
         return order == null ? null : order.getId();
+    }
+
+    private AdminTeamListRow adminTeamListRow(AdminTeamAggregate aggregate) {
+        var user = aggregate.user();
+        var counts = aggregate.counts();
+        var orderStats = aggregate.orderStats();
+        return new AdminTeamListRow(
+                user.getId(),
+                user.getUserName(),
+                user.getEmail(),
+                user.getAvatarKey(),
+                user.getStatus(),
+                counts.directCount(),
+                counts.indirectCount(),
+                counts.totalCount(),
+                aggregate.yesterdayCommission(),
+                aggregate.totalCommission(),
+                orderStats.activeOrderCount(),
+                orderStats.runningOrderCount(),
+                aggregate.lastCommissionAt(),
+                CURRENCY_USDT);
+    }
+
+    private AdminTeamLeaderboardRow adminTeamLeaderboardRow(AdminTeamAggregate aggregate, long rankNo) {
+        var user = aggregate.user();
+        var counts = aggregate.counts();
+        return new AdminTeamLeaderboardRow(
+                rankNo,
+                user.getId(),
+                user.getUserName(),
+                user.getAvatarKey(),
+                user.getStatus(),
+                counts.directCount(),
+                counts.indirectCount(),
+                aggregate.yesterdayCommission(),
+                aggregate.totalCommission(),
+                aggregate.orderStats().activeOrderCount(),
+                CURRENCY_USDT);
+    }
+
+    private AdminTeamUserSummaryResponse adminTeamUserSummaryResponse(AdminTeamAggregate aggregate) {
+        var user = aggregate.user();
+        var counts = aggregate.counts();
+        var orderStats = aggregate.orderStats();
+        return new AdminTeamUserSummaryResponse(
+                user.getId(),
+                user.getUserName(),
+                user.getEmail(),
+                user.getAvatarKey(),
+                user.getStatus(),
+                counts.directCount(),
+                counts.indirectCount(),
+                counts.totalCount(),
+                aggregate.yesterdayCommission(),
+                aggregate.totalCommission(),
+                orderStats.activeOrderCount(),
+                orderStats.runningOrderCount(),
+                CURRENCY_USDT);
+    }
+
+    private AdminTeamTreeNode adminTeamTreeNode(
+            Long userId,
+            AppUser user,
+            Long parentUserId,
+            int levelDepth,
+            TeamCounts counts,
+            BigDecimal totalContribution,
+            BigDecimal yesterdayContribution
+    ) {
+        var childrenCount = levelDepth >= MAX_HIERARCHY_LEVEL ? 0 : counts.directCount();
+        return new AdminTeamTreeNode(
+                userId,
+                user == null ? null : user.getUserName(),
+                user == null ? null : user.getAvatarKey(),
+                user == null ? null : user.getStatus(),
+                levelDepth,
+                parentUserId,
+                counts.directCount(),
+                counts.indirectCount(),
+                childrenCount > 0,
+                childrenCount,
+                totalContribution,
+                yesterdayContribution,
+                CURRENCY_USDT);
+    }
+
+    private AdminTeamMemberRow adminTeamMemberRow(
+            UserTeamRelation relation,
+            AppUser user,
+            Long parentUserId,
+            TeamOrderBrief orderBrief,
+            BigDecimal totalContribution,
+            BigDecimal yesterdayContribution
+    ) {
+        return new AdminTeamMemberRow(
+                relation.getId(),
+                relation.getAncestorUserId(),
+                parentUserId,
+                relation.getDescendantUserId(),
+                user == null ? null : user.getUserName(),
+                user == null ? null : user.getAvatarKey(),
+                user == null ? null : user.getStatus(),
+                relation.getLevelDepth(),
+                relation.getCreatedAt(),
+                orderBrief.orderStatus(),
+                orderBrief.latestOrderNo(),
+                yesterdayContribution,
+                totalContribution,
+                CURRENCY_USDT);
     }
 
     private AdminUserResponse userResponse(AppUser user) {
@@ -960,6 +1634,37 @@ public class AdminBusinessQueryService {
 
     private boolean hasText(String value) {
         return StringUtils.hasText(value);
+    }
+
+    private record AdminTeamAggregate(
+            AppUser user,
+            TeamCounts counts,
+            BigDecimal yesterdayCommission,
+            BigDecimal totalCommission,
+            TeamOrderStats orderStats,
+            LocalDateTime lastCommissionAt
+    ) {
+        private Long userId() {
+            return user.getId();
+        }
+    }
+
+    private record TeamCounts(long directCount, long indirectCount) {
+        private static final TeamCounts ZERO = new TeamCounts(0, 0);
+
+        private long totalCount() {
+            return directCount + indirectCount;
+        }
+    }
+
+    private record TeamOrderStats(long activeOrderCount, long runningOrderCount) {
+        private static final TeamOrderStats ZERO = new TeamOrderStats(0, 0);
+    }
+
+    private record TeamOrderBrief(String orderStatus, String latestOrderNo) {
+        private static TeamOrderBrief none() {
+            return new TeamOrderBrief(ORDER_STATUS_NONE, null);
+        }
     }
 
     private record UserBrief(String userName, String email) {

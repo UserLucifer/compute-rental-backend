@@ -10,7 +10,13 @@ import com.compute.rental.modules.system.dto.AdminProfitRecordResponse;
 import com.compute.rental.modules.system.dto.AdminRentalOrderDetailResponse;
 import com.compute.rental.modules.system.dto.AdminRentalOrderResponse;
 import com.compute.rental.modules.system.dto.AdminSettlementOrderResponse;
+import com.compute.rental.modules.system.dto.AdminTeamLeaderboardRow;
+import com.compute.rental.modules.system.dto.AdminTeamListRow;
+import com.compute.rental.modules.system.dto.AdminTeamMemberRow;
+import com.compute.rental.modules.system.dto.AdminTeamOverviewResponse;
 import com.compute.rental.modules.system.dto.AdminTeamRelationResponse;
+import com.compute.rental.modules.system.dto.AdminTeamTreeNode;
+import com.compute.rental.modules.system.dto.AdminTeamUserSummaryResponse;
 import com.compute.rental.modules.system.dto.AdminUserResponse;
 import com.compute.rental.modules.system.dto.AdminUserTeamResponse;
 import com.compute.rental.modules.system.dto.AdminWalletResponse;
@@ -268,6 +274,73 @@ public class AdminBusinessController {
     @GetMapping("/commission/records/{commissionNo}")
     public ApiResponse<AdminCommissionRecordResponse> commissionRecord(@PathVariable String commissionNo) {
         return ApiResponse.success(adminBusinessQueryService.getCommissionRecord(commissionNo));
+    }
+
+    @Operation(summary = "Admin team overview")
+    @GetMapping("/team/overview")
+    public ApiResponse<AdminTeamOverviewResponse> teamOverview(
+            @RequestParam(required = false, name = "start_time")
+            @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false, name = "end_time")
+            @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime
+    ) {
+        return ApiResponse.success(adminBusinessQueryService.adminTeamOverview(startTime, endTime));
+    }
+
+    @Operation(summary = "Admin team list")
+    @GetMapping("/team/list")
+    public ApiResponse<PageResult<AdminTeamListRow>> teamList(
+            @RequestParam(defaultValue = "1") long pageNo,
+            @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) String sortBy
+    ) {
+        return ApiResponse.success(adminBusinessQueryService.pageAdminTeamList(pageNo, pageSize, keyword, status,
+                sortBy));
+    }
+
+    @Operation(summary = "Admin team leaderboard")
+    @GetMapping("/team/leaderboard")
+    public ApiResponse<PageResult<AdminTeamLeaderboardRow>> teamLeaderboard(
+            @RequestParam(defaultValue = "1") long pageNo,
+            @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String sortBy
+    ) {
+        return ApiResponse.success(adminBusinessQueryService.pageAdminTeamLeaderboard(pageNo, pageSize, sortBy));
+    }
+
+    @Operation(summary = "Admin team user summary")
+    @GetMapping("/team/user-summary")
+    public ApiResponse<AdminTeamUserSummaryResponse> teamUserSummary(
+            @RequestParam(name = "user_id") Long userId
+    ) {
+        return ApiResponse.success(adminBusinessQueryService.adminTeamUserSummary(userId));
+    }
+
+    @Operation(summary = "Admin team children")
+    @GetMapping("/team/children")
+    public ApiResponse<PageResult<AdminTeamTreeNode>> teamChildren(
+            @RequestParam(name = "root_user_id") Long rootUserId,
+            @RequestParam(name = "parent_user_id") Long parentUserId,
+            @RequestParam(defaultValue = "1") long pageNo,
+            @RequestParam(defaultValue = "50") long pageSize
+    ) {
+        return ApiResponse.success(adminBusinessQueryService.pageAdminTeamChildren(rootUserId, parentUserId, pageNo,
+                pageSize));
+    }
+
+    @Operation(summary = "Admin team members")
+    @GetMapping("/team/members")
+    public ApiResponse<PageResult<AdminTeamMemberRow>> teamMembers(
+            @RequestParam(name = "ancestor_user_id") Long ancestorUserId,
+            @RequestParam(defaultValue = "1") long pageNo,
+            @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false, name = "level_depth") Integer levelDepth,
+            @RequestParam(required = false) String keyword
+    ) {
+        return ApiResponse.success(adminBusinessQueryService.pageAdminTeamMembers(ancestorUserId, pageNo, pageSize,
+                levelDepth, keyword));
     }
 
     @Operation(summary = "Admin team relations")
