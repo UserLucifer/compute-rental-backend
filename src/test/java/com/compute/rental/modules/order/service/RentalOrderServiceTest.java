@@ -40,10 +40,13 @@ import com.compute.rental.modules.product.mapper.GpuModelMapper;
 import com.compute.rental.modules.product.mapper.ProductMapper;
 import com.compute.rental.modules.product.mapper.RegionMapper;
 import com.compute.rental.modules.product.mapper.RentalCycleRuleMapper;
+import com.compute.rental.modules.system.service.SysConfigDefaults;
+import com.compute.rental.modules.system.service.SysConfigService;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.wallet.entity.WalletTransaction;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.session.Configuration;
@@ -104,6 +107,9 @@ class RentalOrderServiceTest {
     @Mock
     private RentalOrderRunSegmentService runSegmentService;
 
+    @Mock
+    private SysConfigService sysConfigService;
+
     @Captor
     private ArgumentCaptor<RentalOrder> rentalOrderCaptor;
 
@@ -133,6 +139,10 @@ class RentalOrderServiceTest {
     void setUpRedisLock() {
         lenient().when(redisLockClient.tryLock(any(), any()))
                 .thenReturn(Optional.of(new RedisLock("test-lock", "test-value")));
+        lenient().when(sysConfigService.getInteger(
+                        eq(SysConfigDefaults.ORDER_PENDING_ACTIVATION_TIMEOUT_MINUTES),
+                        eq(15)))
+                .thenReturn(15);
     }
 
     @Test
@@ -379,6 +389,29 @@ class RentalOrderServiceTest {
     }
 
     @Test
+    void payDeployFeeShouldCancelWhenDeployFeeTimeoutExpired() {
+        var expired = order(RentalOrderStatus.PENDING_ACTIVATION);
+        expired.setApiGeneratedAt(LocalDateTime.now().minusMinutes(16));
+        when(rentalOrderMapper.selectOne(any(Wrapper.class))).thenReturn(expired);
+        when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.GENERATED));
+        when(apiDeployOrderMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(rentalOrderMapper.update(any(), any(Wrapper.class))).thenReturn(1);
+        when(walletService.credit(eq(10L), any(BigDecimal.class), eq(WalletBusinessType.REFUND),
+                eq("RO001"), eq("DEPLOY_FEE_TIMEOUT"), any())).thenReturn(walletTransaction());
+
+        assertThatThrownBy(() -> rentalOrderService.payDeployFee(10L, "RO001"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.RENTAL_ORDER_DEPLOY_FEE_EXPIRED);
+
+        verify(walletService).credit(eq(10L), any(BigDecimal.class), eq(WalletBusinessType.REFUND),
+                eq("RO001"), eq("DEPLOY_FEE_TIMEOUT"), any());
+        verify(apiCredentialMapper).update(any(), any(Wrapper.class));
+        verify(walletService, never()).debit(any(), any(), any(), any(), any(), any());
+        verify(apiDeployOrderMapper, never()).insert(any(ApiDeployOrder.class));
+    }
+
+    @Test
     void repeatedDeployPayShouldReturnPaidOrderWithoutDebitAgain() {
         when(rentalOrderMapper.selectOne(any(Wrapper.class))).thenReturn(order(RentalOrderStatus.RUNNING));
         when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.ACTIVE));
@@ -552,6 +585,10 @@ class RentalOrderServiceTest {
         order.setOrderAmount(new BigDecimal("1000.00000000"));
         order.setPaidAmount(status == RentalOrderStatus.PENDING_PAY
                 ? BigDecimal.ZERO.setScale(8) : new BigDecimal("1000.00000000"));
+        if (status != RentalOrderStatus.PENDING_PAY) {
+            order.setPaidAt(LocalDateTime.now());
+            order.setApiGeneratedAt(LocalDateTime.now());
+        }
         order.setExpectedDailyProfit(new BigDecimal("12.00000000"));
         order.setExpectedTotalProfit(new BigDecimal("360.00000000"));
         order.setOrderStatus(status.name());

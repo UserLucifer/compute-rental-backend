@@ -57,31 +57,31 @@ INSERT INTO `ai_model` (
   `monthly_token_consumption_trillion`, `token_unit_price`, `deploy_tech_fee`,
   `status`, `sort_no`
 ) VALUES
-('GPT_5_4', 'GPT-5.4', 'OpenAI', NULL, 18.00, 0.00000625, 174.81, 1, 1),
-('GPT_5_4_MINI', 'GPT-5.4 mini', 'OpenAI', NULL, 32.00, 0.00000188, 187.44, 1, 2),
-('GPT_5_3_CODEX', 'GPT-5.3 Codex', 'OpenAI', NULL, 12.00, 0.00000500, 195.40, 1, 3),
-('CLAUDE_OPUS_4_5', 'Claude Opus 4.5', 'Anthropic', NULL, 8.00, 0.00001100, 145.57, 1, 4),
-('CLAUDE_SONNET_4_5', 'Claude Sonnet 4.5', 'Anthropic', NULL, 16.00, 0.00000660, 139.25, 1, 5),
-('CLAUDE_HAIKU_4_5', 'Claude Haiku 4.5', 'Anthropic', NULL, 28.00, 0.00000220, 168.66, 1, 6),
-('GEMINI_3_PRO', 'Gemini 3 Pro', 'Google', NULL, 20.00, 0.00000450, 101.61, 1, 7),
-('GEMINI_2_5_PRO', 'Gemini 2.5 Pro', 'Google', NULL, 18.00, 0.00000350, 146.81, 1, 8),
-('GEMINI_2_5_FLASH', 'Gemini 2.5 Flash', 'Google', NULL, 40.00, 0.00000050, 111.37, 1, 9),
-('DEEPSEEK_V3', 'DeepSeek-V3', 'DeepSeek', NULL, 36.00, 0.00000038, 162.88, 1, 10),
-('DEEPSEEK_R1', 'DeepSeek-R1', 'DeepSeek', NULL, 24.00, 0.00000110, 121.68, 1, 11),
-('QWEN3_MAX', 'Qwen3-Max', 'Alibaba Cloud', NULL, 22.00, 0.00000264, 156.87, 1, 12),
-('QWEN3_MAX_THINKING', 'Qwen3-Max-Thinking', 'Alibaba Cloud', NULL, 14.00, 0.00000420, 189.47, 1, 13),
-('QWEN3_235B_A22B', 'Qwen3-235B-A22B', 'Alibaba Cloud', NULL, 30.00, 0.00000150, 100.21, 1, 14),
-('KIMI_K2', 'Kimi K2', 'Moonshot AI', NULL, 26.00, 0.00000117, 189.35, 1, 15),
-('KIMI_K2_THINKING', 'Kimi K2 Thinking', 'Moonshot AI', NULL, 18.00, 0.00000160, 176.93, 1, 16),
-('GLM_4_5', 'GLM-4.5', 'Zhipu AI', NULL, 24.00, 0.00000120, 100.74, 1, 17),
-('GLM_4_5_AIR', 'GLM-4.5-Air', 'Zhipu AI', NULL, 34.00, 0.00000040, 137.14, 1, 18),
-('ERNIE_4_5', 'ERNIE 4.5', 'Baidu', NULL, 30.00, 0.00000047, 155.67, 1, 19),
-('GROK_4_20', 'Grok 4.20', 'xAI', NULL, 10.00, 0.00000600, 107.35, 1, 20),
-('GROK_4_FAST', 'Grok 4 Fast', 'xAI', NULL, 30.00, 0.00000029, 183.49, 1, 21),
-('LLAMA_4_MAVERICK', 'Llama 4 Maverick', 'Meta', NULL, 32.00, 0.00000050, 180.73, 1, 22),
-('LLAMA_4_SCOUT', 'Llama 4 Scout', 'Meta', NULL, 42.00, 0.00000020, 168.96, 1, 23),
-('MISTRAL_LARGE_3', 'Mistral Large 3', 'Mistral AI', NULL, 16.00, 0.00000300, 192.99, 1, 24),
-('MISTRAL_MEDIUM_3', 'Mistral Medium 3', 'Mistral AI', NULL, 28.00, 0.00000080, 173.61, 1, 25)
+('GPT_5_4', 'GPT-5.4', 'OpenAI', '/images/logo/openai@logotyp.us.svg', 18.00, 0.00000625, 174.81, 1, 1),
+('GPT_5_4_MINI', 'GPT-5.4 mini', 'OpenAI', '/images/logo/openai@logotyp.us.svg', 32.00, 0.00000188, 187.44, 1, 2),
+('GPT_5_3_CODEX', 'GPT-5.3 Codex', 'OpenAI', '/images/logo/openai@logotyp.us.svg', 12.00, 0.00000500, 195.40, 1, 3),
+('CLAUDE_OPUS_4_5', 'Claude Opus 4.5', 'Anthropic', '/images/logo/anthropic-1.svg', 8.00, 0.00001100, 145.57, 1, 4),
+('CLAUDE_SONNET_4_5', 'Claude Sonnet 4.5', 'Anthropic', '/images/logo/anthropic-1.svg', 16.00, 0.00000660, 139.25, 1, 5),
+('CLAUDE_HAIKU_4_5', 'Claude Haiku 4.5', 'Anthropic', '/images/logo/anthropic-1.svg', 28.00, 0.00000220, 168.66, 1, 6),
+('GEMINI_3_PRO', 'Gemini 3 Pro', 'Google', '/images/logo/google-ai-1.svg', 20.00, 0.00000450, 101.61, 1, 7),
+('GEMINI_2_5_PRO', 'Gemini 2.5 Pro', 'Google', '/images/logo/google-ai-1.svg', 18.00, 0.00000350, 146.81, 1, 8),
+('GEMINI_2_5_FLASH', 'Gemini 2.5 Flash', 'Google', '/images/logo/google-ai-1.svg', 40.00, 0.00000050, 111.37, 1, 9),
+('DEEPSEEK_V3', 'DeepSeek-V3', 'DeepSeek', '/images/logo/deepseek-2.svg', 36.00, 0.00000038, 162.88, 1, 10),
+('DEEPSEEK_R1', 'DeepSeek-R1', 'DeepSeek', '/images/logo/deepseek-2.svg', 24.00, 0.00000110, 121.68, 1, 11),
+('QWEN3_MAX', 'Qwen3-Max', 'Alibaba Cloud', '/images/logo/alibaba-cloud-1.svg', 22.00, 0.00000264, 156.87, 1, 12),
+('QWEN3_MAX_THINKING', 'Qwen3-Max-Thinking', 'Alibaba Cloud', '/images/logo/alibaba-cloud-1.svg', 14.00, 0.00000420, 189.47, 1, 13),
+('QWEN3_235B_A22B', 'Qwen3-235B-A22B', 'Alibaba Cloud', '/images/logo/alibaba-cloud-1.svg', 30.00, 0.00000150, 100.21, 1, 14),
+('KIMI_K2', 'Kimi K2', 'Moonshot AI', '/images/logo/moonshot-ai.svg', 26.00, 0.00000117, 189.35, 1, 15),
+('KIMI_K2_THINKING', 'Kimi K2 Thinking', 'Moonshot AI', '/images/logo/moonshot-ai.svg', 18.00, 0.00000160, 176.93, 1, 16),
+('GLM_4_5', 'GLM-4.5', 'Zhipu AI', '/images/logo/zhipu-ai.svg', 24.00, 0.00000120, 100.74, 1, 17),
+('GLM_4_5_AIR', 'GLM-4.5-Air', 'Zhipu AI', '/images/logo/zhipu-ai.svg', 34.00, 0.00000040, 137.14, 1, 18),
+('ERNIE_4_5', 'ERNIE 4.5', 'Baidu', '/images/logo/baidu-icon.svg', 30.00, 0.00000047, 155.67, 1, 19),
+('GROK_4_20', 'Grok 4.20', 'xAI', '/images/logo/xai-2.svg', 10.00, 0.00000600, 107.35, 1, 20),
+('GROK_4_FAST', 'Grok 4 Fast', 'xAI', '/images/logo/xai-2.svg', 30.00, 0.00000029, 183.49, 1, 21),
+('LLAMA_4_MAVERICK', 'Llama 4 Maverick', 'Meta', '/images/logo/meta-3.svg', 32.00, 0.00000050, 180.73, 1, 22),
+('LLAMA_4_SCOUT', 'Llama 4 Scout', 'Meta', '/images/logo/meta-3.svg', 42.00, 0.00000020, 168.96, 1, 23),
+('MISTRAL_LARGE_3', 'Mistral Large 3', 'Mistral AI', '/images/logo/mistral-2.svg', 16.00, 0.00000300, 192.99, 1, 24),
+('MISTRAL_MEDIUM_3', 'Mistral Medium 3', 'Mistral AI', '/images/logo/mistral-2.svg', 28.00, 0.00000080, 173.61, 1, 25)
 ON DUPLICATE KEY UPDATE
   `model_name` = VALUES(`model_name`),
   `vendor_name` = VALUES(`vendor_name`),
@@ -269,8 +269,8 @@ INSERT INTO `sys_config` (`config_key`, `config_value`, `config_desc`) VALUES
 ('withdraw.fee_rate',                '0.05',   '提现手续费比例，小于门槛时收取（5%）'),
 ('withdraw.max_daily_amount',        '100000', '每日累计提现上限 USDT'),
 ('recharge.min_amount',              '500',    '全局最低充值金额 USDT'),
-('order.activation_timeout_minutes', '60',     '待激活订单超时自动取消时间（分钟），超时退还机器费'),
-('order.pending_activation_timeout_minutes', '60', '待激活订单超时自动取消时间（分钟），兼容当前阶段配置键'),
+('order.activation_timeout_minutes', '15',     '待激活订单超时自动取消时间（分钟），超时退还机器费'),
+('order.pending_activation_timeout_minutes', '15', '待激活订单超时自动取消时间（分钟），兼容当前阶段配置键'),
 ('email_code.rate_limit_per_minute', '5',      '邮箱验证码每分钟最大发送次数');
 
 -- Product catalog initialization data.
@@ -4505,6 +4505,4 @@ WHERE ro.`profit_start_at` IS NOT NULL
     FROM `rental_order_run_segment` existing_segment
     WHERE existing_segment.`rental_order_id` = ro.`id`
   );
-
-
 

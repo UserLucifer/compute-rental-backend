@@ -104,21 +104,16 @@ app:
   websocket:
     allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:3000}
   order:
-    # 本地默认和生产一致：部署费支付后 24 小时自动暂停。
-#    auto-pause-delay: ${APP_ORDER_AUTO_PAUSE_DELAY:24h}
-    # 本地测试自动暂停时，注释上面的 24h，打开下面的 5m；测完恢复 24h。
-     auto-pause-delay: ${APP_ORDER_AUTO_PAUSE_DELAY:5m}
+    # 支付部署费后 24 小时自动暂停。
+    auto-pause-delay: ${APP_ORDER_AUTO_PAUSE_DELAY:24h}
   scheduler:
-    # 本地默认和生产一致。
-#    daily-profit-cron: "${APP_SCHEDULER_DAILY_PROFIT_CRON:0 0 0 * * *}"
-#    order-expire-settle-cron: "${APP_SCHEDULER_ORDER_EXPIRE_SETTLE_CRON:0 * * * * *}"
-#    auto-pause-cron: "${APP_SCHEDULER_AUTO_PAUSE_CRON:0 */5 * * * *}"
-#    deploy-fee-timeout-cancel-cron: "${APP_SCHEDULER_DEPLOY_FEE_TIMEOUT_CANCEL_CRON:0 */10 * * * *}"
-#    commission-generate-cron: "${APP_SCHEDULER_COMMISSION_GENERATE_CRON:0 */5 * * * *}"
-
-     #本地测试加速配置：需要时注释上面同名配置，再打开下面同名配置；测完恢复上面的生产标准。
-     daily-profit-cron: "${APP_SCHEDULER_DAILY_PROFIT_CRON:0 */10 * * * *}"
-     order-expire-settle-cron: "${APP_SCHEDULER_ORDER_EXPIRE_SETTLE_CRON:0 * * * * *}"
-     auto-pause-cron: "${APP_SCHEDULER_AUTO_PAUSE_CRON:0 * * * * *}"
-     deploy-fee-timeout-cancel-cron: "${APP_SCHEDULER_DEPLOY_FEE_TIMEOUT_CANCEL_CRON:0 */10 * * * *}"
-     commission-generate-cron: "${APP_SCHEDULER_COMMISSION_GENERATE_CRON:0 * * * * *}"
+    # 每天凌晨 00:00 跑一次收益结算。它结算的是上一自然日收益。
+    daily-profit-cron: "${APP_SCHEDULER_DAILY_PROFIT_CRON:0 0 0 * * *}"
+    # 每秒执行订单到期结算扫描。
+    order-expire-settle-cron: "${APP_SCHEDULER_ORDER_EXPIRE_SETTLE_CRON:* * * * * *}"
+    # 每秒执行自动暂停扫描，运行片段按 autoPauseAt 精确截断。
+    auto-pause-cron: "${APP_SCHEDULER_AUTO_PAUSE_CRON:* * * * * *}"
+    # 每秒执行部署费超时取消扫描，支付接口也会同步拦截超过 15 分钟的部署费支付。
+    deploy-fee-timeout-cancel-cron: "${APP_SCHEDULER_DEPLOY_FEE_TIMEOUT_CANCEL_CRON:* * * * * *}"
+    # 每 5 分钟扫一次已经入账的收益记录，然后给上级生成佣金。
+    commission-generate-cron: "${APP_SCHEDULER_COMMISSION_GENERATE_CRON:0 */5 * * * *}"

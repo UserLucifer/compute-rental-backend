@@ -46,7 +46,7 @@ WEBSOCKET_ALLOWED_ORIGINS=https://admin.example.com,https://app.example.com
 
 `prod` profile 会强制校验生产配置：禁止开发占位密钥、本机 DB/Redis/RabbitMQ、RabbitMQ `guest/guest`、空 Redis 密码、通配 WebSocket Origin，并默认关闭 Knife4j/springdoc。
 
-定时任务配置分两类：`app.order.auto-pause-delay` 是自动暂停业务延迟；`app.scheduler.auto-pause-cron` 只是扫描频率。本地默认和生产保持一致，测试加速配置只作为注释放在 `application.yml` 中，需要时手动切换。
+定时任务配置分两类：`app.order.auto-pause-delay` 是自动暂停业务延迟；`app.scheduler.auto-pause-cron` 是扫描频率。默认自动暂停每秒扫描，并按 `autoPauseAt` 截断运行片段，测试加速不要写入配置文件，需要时通过环境变量临时覆盖。
 
 默认开发库名：
 

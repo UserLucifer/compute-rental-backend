@@ -17,13 +17,18 @@ app:
   production:
     enforce: true
   order:
-    # Production/live value: auto pause 24 hours after deploy fee payment.
+    # 支付部署费后 24 小时自动暂停。
     auto-pause-delay: ${APP_ORDER_AUTO_PAUSE_DELAY:24h}
   scheduler:
+    # 每天 00:00:00 执行每日收益结算。
     daily-profit-cron: "${APP_SCHEDULER_DAILY_PROFIT_CRON:0 0 0 * * *}"
-    order-expire-settle-cron: "${APP_SCHEDULER_ORDER_EXPIRE_SETTLE_CRON:0 * * * * *}"
-    auto-pause-cron: "${APP_SCHEDULER_AUTO_PAUSE_CRON:0 */5 * * * *}"
-    deploy-fee-timeout-cancel-cron: "${APP_SCHEDULER_DEPLOY_FEE_TIMEOUT_CANCEL_CRON:0 */10 * * * *}"
+    # 每秒执行订单到期结算扫描。
+    order-expire-settle-cron: "${APP_SCHEDULER_ORDER_EXPIRE_SETTLE_CRON:* * * * * *}"
+    # 每秒执行自动暂停扫描，运行片段按 autoPauseAt 精确截断。
+    auto-pause-cron: "${APP_SCHEDULER_AUTO_PAUSE_CRON:* * * * * *}"
+    # 每秒执行部署费超时取消扫描，支付接口也会同步拦截超过 15 分钟的部署费支付。
+    deploy-fee-timeout-cancel-cron: "${APP_SCHEDULER_DEPLOY_FEE_TIMEOUT_CANCEL_CRON:* * * * * *}"
+    # 每 5 分钟执行佣金生成扫描。
     commission-generate-cron: "${APP_SCHEDULER_COMMISSION_GENERATE_CRON:0 */5 * * * *}"
   websocket:
     allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:}

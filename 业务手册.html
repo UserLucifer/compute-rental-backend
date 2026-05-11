@@ -818,8 +818,8 @@
             </tr>
             <tr>
               <td>默认待部署超时</td>
-              <td><code>order.pending_activation_timeout_minutes = 60</code>。</td>
-              <td>机器费已付但部署费未付，超过 60 分钟自动取消并退机器费。</td>
+              <td><code>order.pending_activation_timeout_minutes = 15</code>。</td>
+              <td>机器费已付但部署费未付，达到 15 分钟自动取消并退机器费。</td>
             </tr>
           </tbody>
         </table>
@@ -1434,7 +1434,7 @@
             <tr>
               <td>系统超时取消</td>
               <td>PENDING_ACTIVATION（待支付部署费）</td>
-              <td>定时任务每 10 分钟扫描，默认 60 分钟未支付部署费。</td>
+              <td>定时任务每秒扫描，默认 15 分钟未支付部署费；支付接口同步拒绝超时支付。</td>
               <td>订单 CANCELED（已取消），机器费退回钱包，API 凭证 REVOKED（已撤销）。</td>
             </tr>
           </tbody>
@@ -1463,7 +1463,7 @@
           <div class="arrow">→</div>
           <div class="node money"><strong>运行片段开始</strong><span>记录 segmentStartAt，后续收益只按片段分钟计算。</span></div>
           <div class="arrow">→</div>
-          <div class="node warn"><strong>自动暂停</strong><span>每 5 分钟扫描 autoPauseAt 到期的订单，关闭运行片段。</span></div>
+          <div class="node warn"><strong>自动暂停</strong><span>每秒扫描 autoPauseAt 到期的订单，并按 autoPauseAt 关闭运行片段。</span></div>
           <div class="arrow">→</div>
           <div class="node warn"><strong>PAUSED（已暂停）</strong><span>订单和 API 凭证都暂停。</span></div>
           <div class="arrow">→</div>
@@ -2058,7 +2058,7 @@
             </tr>
             <tr>
               <td>自动暂停</td>
-              <td>每 5 分钟扫描；自动暂停时间是部署费支付后 24 小时。</td>
+              <td>每秒扫描；自动暂停时间是部署费支付后 24 小时，运行片段按 autoPauseAt 截断。</td>
               <td>把 RUNNING（运行中）/ACTIVATING（激活中） 且 autoPauseAt 到期的订单/API 改 PAUSED（已暂停），并关闭当前运行片段。</td>
               <td>暂停期间不产生收益，但租期继续消耗。</td>
             </tr>

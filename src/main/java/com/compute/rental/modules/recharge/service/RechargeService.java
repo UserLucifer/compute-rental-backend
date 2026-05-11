@@ -106,9 +106,10 @@ public class RechargeService {
                         .orderByAsc(RechargeChannel::getSortNo)
                         .orderByDesc(RechargeChannel::getId));
         var translations = rechargeChannelTranslationMap(channels.stream().map(RechargeChannel::getId).toList(), locale);
+        var globalMinAmount = globalRechargeMinAmount();
         return channels
                 .stream()
-                .map(channel -> toChannelResponse(channel, translations.get(channel.getId()), locale))
+                .map(channel -> toChannelResponse(channel, translations.get(channel.getId()), locale, globalMinAmount))
                 .toList();
     }
 
@@ -476,11 +477,18 @@ public class RechargeService {
     }
 
     private BigDecimal effectiveMinAmount(RechargeChannel channel) {
-        var globalMin = sysConfigService.getBigDecimal(SysConfigDefaults.RECHARGE_MIN_AMOUNT, new BigDecimal("500"));
+        return effectiveMinAmount(channel, globalRechargeMinAmount());
+    }
+
+    private BigDecimal effectiveMinAmount(RechargeChannel channel, BigDecimal globalMin) {
         if (channel.getMinAmount() == null) {
             return globalMin;
         }
         return globalMin.max(channel.getMinAmount());
+    }
+
+    private BigDecimal globalRechargeMinAmount() {
+        return sysConfigService.getBigDecimal(SysConfigDefaults.RECHARGE_MIN_AMOUNT, new BigDecimal("500"));
     }
 
     private void ensureExternalTxNoAvailable(String externalTxNo) {
@@ -546,13 +554,14 @@ public class RechargeService {
     }
 
     private RechargeChannelResponse toChannelResponse(RechargeChannel channel) {
-        return toChannelResponse(channel, null, LanguageResolver.DEFAULT_LANGUAGE);
+        return toChannelResponse(channel, null, LanguageResolver.DEFAULT_LANGUAGE, globalRechargeMinAmount());
     }
 
     private RechargeChannelResponse toChannelResponse(
             RechargeChannel channel,
             RechargeChannelTranslation translation,
-            String requestedLocale
+            String requestedLocale,
+            BigDecimal globalMinAmount
     ) {
         var channelName = localized(channel.getChannelName(), requestedLocale,
                 translation == null ? null : translation.getChannelName());
@@ -567,7 +576,7 @@ public class RechargeService {
                 channel.getDisplayUrl(),
                 accountName.value(),
                 channel.getAccountNo(),
-                channel.getMinAmount(),
+                effectiveMinAmount(channel, globalMinAmount),
                 channel.getMaxAmount(),
                 channel.getFeeRate(),
                 channel.getSortNo(),

@@ -42,11 +42,14 @@ import com.compute.rental.modules.product.mapper.GpuModelMapper;
 import com.compute.rental.modules.product.mapper.ProductMapper;
 import com.compute.rental.modules.product.mapper.RegionMapper;
 import com.compute.rental.modules.product.mapper.RentalCycleRuleMapper;
+import com.compute.rental.modules.system.service.SysConfigDefaults;
+import com.compute.rental.modules.system.service.SysConfigService;
 import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.wallet.service.WalletService;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -67,6 +70,8 @@ public class RentalOrderService {
     private static final String CURRENCY_USDT = "USDT";
     private static final String PAY_ACTION = "PAY";
     private static final String CANCEL_ACTION = "CANCEL";
+    private static final String DEPLOY_FEE_TIMEOUT_ACTION = "DEPLOY_FEE_TIMEOUT";
+    private static final int DEFAULT_DEPLOY_FEE_TIMEOUT_MINUTES = 15;
     private static final Duration ORDER_OPERATION_LOCK_TTL = Duration.ofMinutes(1);
 
     private final RentalOrderMapper rentalOrderMapper;
@@ -83,6 +88,7 @@ public class RentalOrderService {
     private final ApiTokenProperties apiTokenProperties;
     private final RedisLockClient redisLockClient;
     private final RentalOrderRunSegmentService runSegmentService;
+    private final SysConfigService sysConfigService;
     private final Duration autoPauseDelay;
 
     public RentalOrderService(
@@ -100,6 +106,7 @@ public class RentalOrderService {
             ApiTokenProperties apiTokenProperties,
             RedisLockClient redisLockClient,
             RentalOrderRunSegmentService runSegmentService,
+            SysConfigService sysConfigService,
             @Value("${app.order.auto-pause-delay:24h}") Duration autoPauseDelay
     ) {
         this.rentalOrderMapper = rentalOrderMapper;
@@ -116,6 +123,7 @@ public class RentalOrderService {
         this.apiTokenProperties = apiTokenProperties;
         this.redisLockClient = redisLockClient;
         this.runSegmentService = runSegmentService;
+        this.sysConfigService = sysConfigService;
         this.autoPauseDelay = autoPauseDelay == null ? Duration.ofHours(24) : autoPauseDelay;
     }
 
@@ -293,7 +301,7 @@ public class RentalOrderService {
         return toDeployInfoResponse(order, credential, findDeployOrder(order.getId(), credential.getId()));
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = DeployFeeExpiredException.class)
     public ApiDeployOrderResponse payDeployFee(Long userId, String orderNo) {
         return withOrderOperationLock(orderNo, "deploy-pay", () -> doPayDeployFee(userId, orderNo));
     }
@@ -313,6 +321,10 @@ public class RentalOrderService {
         }
 
         var now = DateTimeUtils.now();
+        if (isDeployFeeExpired(order, now)) {
+            cancelDeployFeeExpired(order);
+            throw new DeployFeeExpiredException();
+        }
         var autoPauseAt = now.plus(autoPauseDelay);
         var deployOrder = createPendingDeployOrder(order, credential, now);
         if (ApiDeployOrderStatus.PAID.name().equals(deployOrder.getStatus())) {
@@ -477,6 +489,14 @@ public class RentalOrderService {
     }
 
     private void cancelPendingActivation(RentalOrder order) {
+        cancelPendingActivation(order, CANCEL_ACTION, "租赁订单取消退款");
+    }
+
+    private void cancelDeployFeeExpired(RentalOrder order) {
+        cancelPendingActivation(order, DEPLOY_FEE_TIMEOUT_ACTION, "部署费超时未支付退款");
+    }
+
+    private void cancelPendingActivation(RentalOrder order, String idempotencyAction, String refundRemark) {
         var now = DateTimeUtils.now();
         var updated = rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
                 .eq(RentalOrder::getId, order.getId())
@@ -492,8 +512,8 @@ public class RentalOrderService {
                 order.getOrderAmount(),
                 WalletBusinessType.REFUND,
                 order.getOrderNo(),
-                CANCEL_ACTION,
-                "租赁订单取消退款"
+                idempotencyAction,
+                refundRemark
         );
         apiCredentialMapper.update(null, new LambdaUpdateWrapper<ApiCredential>()
                 .eq(ApiCredential::getRentalOrderId, order.getId())
@@ -502,6 +522,23 @@ public class RentalOrderService {
                 .set(ApiCredential::getRevokedAt, now)
                 .set(ApiCredential::getUpdatedAt, now));
         // TODO: create sys_notification ORDER_CANCELED after notification service is implemented.
+    }
+
+    private boolean isDeployFeeExpired(RentalOrder order, LocalDateTime now) {
+        if (order.getApiGeneratedAt() == null) {
+            return false;
+        }
+        return !now.isBefore(order.getApiGeneratedAt().plusMinutes(deployFeeTimeoutMinutes()));
+    }
+
+    private int deployFeeTimeoutMinutes() {
+        var timeoutMinutes = sysConfigService.getInteger(
+                SysConfigDefaults.ORDER_PENDING_ACTIVATION_TIMEOUT_MINUTES,
+                DEFAULT_DEPLOY_FEE_TIMEOUT_MINUTES);
+        if (timeoutMinutes == null || timeoutMinutes <= 0) {
+            throw new BusinessException(ErrorCode.SYS_CONFIG_MISSING, "部署费超时时间配置必须大于 0 分钟");
+        }
+        return timeoutMinutes;
     }
 
     private RentalOrder buildOrder(Long userId, String clientRequestId, Product product, AiModel aiModel, RentalCycleRule cycleRule,
@@ -884,5 +921,12 @@ public class RentalOrderService {
 
     private String randomSuffix(int length) {
         return UUID.randomUUID().toString().replace("-", "").substring(0, length).toUpperCase(Locale.ROOT);
+    }
+
+    private static final class DeployFeeExpiredException extends BusinessException {
+
+        private DeployFeeExpiredException() {
+            super(ErrorCode.RENTAL_ORDER_DEPLOY_FEE_EXPIRED);
+        }
     }
 }

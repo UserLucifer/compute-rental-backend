@@ -90,24 +90,25 @@ public class RentalActivationSchedulerProcessor {
         if (credential == null || !isAutoPauseCredential(credential.getTokenStatus())) {
             throw new BusinessException(ErrorCode.API_CREDENTIAL_NOT_ACTIVE);
         }
+        var pauseAt = order.getAutoPauseAt();
         var updatedOrder = rentalOrderMapper.update(null, new LambdaUpdateWrapper<RentalOrder>()
                 .eq(RentalOrder::getId, order.getId())
                 .in(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name(), RentalOrderStatus.ACTIVATING.name())
                 .set(RentalOrder::getOrderStatus, RentalOrderStatus.PAUSED.name())
                 .set(RentalOrder::getProfitStatus, ProfitStatus.PAUSED.name())
-                .set(RentalOrder::getPausedAt, now)
+                .set(RentalOrder::getPausedAt, pauseAt)
                 .set(RentalOrder::getUpdatedAt, now));
         if (updatedOrder == 0) {
             throw new BusinessException(ErrorCode.CONCURRENT_UPDATE_FAILED, "租赁订单状态已变化");
         }
         if (RentalOrderStatus.RUNNING.name().equals(order.getOrderStatus())) {
-            runSegmentService.closeOpenSegment(order.getId(), now, RunSegmentCloseReason.AUTO_PAUSE);
+            runSegmentService.closeOpenSegment(order.getId(), pauseAt, RunSegmentCloseReason.AUTO_PAUSE);
         }
         var updatedCredential = apiCredentialMapper.update(null, new LambdaUpdateWrapper<ApiCredential>()
                 .eq(ApiCredential::getId, credential.getId())
                 .in(ApiCredential::getTokenStatus, ApiTokenStatus.ACTIVE.name(), ApiTokenStatus.ACTIVATING.name())
                 .set(ApiCredential::getTokenStatus, ApiTokenStatus.PAUSED.name())
-                .set(ApiCredential::getPausedAt, now)
+                .set(ApiCredential::getPausedAt, pauseAt)
                 .set(ApiCredential::getUpdatedAt, now));
         if (updatedCredential == 0) {
             throw new BusinessException(ErrorCode.API_CREDENTIAL_STATUS_CHANGED);

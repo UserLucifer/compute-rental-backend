@@ -160,14 +160,30 @@ class RechargeServiceTest {
         translation.setAccountName("Receiving account");
         when(rechargeChannelMapper.selectList(any())).thenReturn(List.of(channel));
         when(rechargeChannelTranslationMapper.selectList(any())).thenReturn(List.of(translation));
+        when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.RECHARGE_MIN_AMOUNT), any(BigDecimal.class)))
+                .thenReturn(new BigDecimal("500.00000000"));
 
         var channels = rechargeService.listEnabledChannels("en-US");
 
         assertThat(channels).hasSize(1);
         assertThat(channels.get(0).channelName()).isEqualTo("USDT TRC20");
         assertThat(channels.get(0).accountName()).isEqualTo("Receiving account");
+        assertThat(channels.get(0).minAmount()).isEqualByComparingTo("500.00000000");
         assertThat(channels.get(0).locale()).isEqualTo("en-US");
         assertThat(channels.get(0).localeFallback()).isFalse();
+    }
+
+    @Test
+    void listEnabledChannelsShouldReturnEffectiveMinAmountFromSysConfig() {
+        var channel = channel(new BigDecimal("1.00000000"));
+        when(rechargeChannelMapper.selectList(any())).thenReturn(List.of(channel));
+        when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.RECHARGE_MIN_AMOUNT), any(BigDecimal.class)))
+                .thenReturn(new BigDecimal("500.00000000"));
+
+        var channels = rechargeService.listEnabledChannels("zh-CN");
+
+        assertThat(channels).hasSize(1);
+        assertThat(channels.get(0).minAmount()).isEqualByComparingTo("500.00000000");
     }
 
     @Test

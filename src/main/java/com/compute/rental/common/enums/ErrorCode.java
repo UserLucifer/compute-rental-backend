@@ -79,6 +79,7 @@ public enum ErrorCode {
     RENTAL_ORDER_NOT_STARTABLE(40005, "仅已暂停租赁订单可启动", HttpStatus.BAD_REQUEST),
     RENTAL_ORDER_NOT_SETTLEABLE(40006, "仅运行中或已暂停租赁订单可提前结算", HttpStatus.BAD_REQUEST),
     RENTAL_ORDER_PROCESSING(40007, "租赁订单正在处理，请稍后重试", HttpStatus.CONFLICT),
+    RENTAL_ORDER_DEPLOY_FEE_EXPIRED(40008, "部署费支付已超时，订单已取消", HttpStatus.BAD_REQUEST),
 
     API_CREDENTIAL_NOT_FOUND(41001, "API 凭证不存在", HttpStatus.NOT_FOUND),
     API_CREDENTIAL_NOT_GENERATED(41002, "仅已生成的 API 凭证可激活", HttpStatus.BAD_REQUEST),

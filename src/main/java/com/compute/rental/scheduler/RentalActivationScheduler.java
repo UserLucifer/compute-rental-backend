@@ -6,6 +6,7 @@ import com.compute.rental.common.enums.SchedulerLogStatus;
 import com.compute.rental.common.util.DateTimeUtils;
 import com.compute.rental.modules.order.entity.RentalOrder;
 import com.compute.rental.modules.order.mapper.RentalOrderMapper;
+import com.compute.rental.modules.system.entity.SchedulerLog;
 import com.compute.rental.modules.system.service.SchedulerLogService;
 import com.compute.rental.modules.system.service.SysConfigDefaults;
 import com.compute.rental.modules.system.service.SysConfigService;
@@ -23,7 +24,11 @@ public class RentalActivationScheduler {
     private static final Logger log = LoggerFactory.getLogger(RentalActivationScheduler.class);
     private static final String DEPLOY_FEE_TIMEOUT_LOCK = "scheduler:deploy_fee_timeout_cancel";
     private static final String AUTO_PAUSE_LOCK = "scheduler:auto_pause";
-    private static final Duration LOCK_TTL = Duration.ofMinutes(9);
+    private static final Duration DEPLOY_FEE_TIMEOUT_LOCK_TTL = Duration.ofSeconds(30);
+    private static final Duration AUTO_PAUSE_LOCK_TTL = Duration.ofSeconds(30);
+    private static final int DEFAULT_DEPLOY_FEE_TIMEOUT_MINUTES = 15;
+    private static final long DEPLOY_FEE_TIMEOUT_PAGE_SIZE = 100L;
+    private static final long AUTO_PAUSE_PAGE_SIZE = 100L;
 
     private final SchedulerLockTemplate schedulerLockTemplate;
     private final SchedulerLogService schedulerLogService;
@@ -45,20 +50,24 @@ public class RentalActivationScheduler {
         this.processor = processor;
     }
 
-    @Scheduled(cron = "${app.scheduler.deploy-fee-timeout-cancel-cron:${app.scheduler.activation-timeout-cancel-cron:0 */10 * * * *}}")
+    @Scheduled(cron = "${app.scheduler.deploy-fee-timeout-cancel-cron:${app.scheduler.activation-timeout-cancel-cron:* * * * * *}}")
     public void scheduledDeployFeeTimeoutCancel() {
-        runDeployFeeTimeoutCancel();
+        runDeployFeeTimeoutCancel(false);
     }
 
-    @Scheduled(cron = "${app.scheduler.auto-pause-cron:0 */5 * * * *}")
+    @Scheduled(cron = "${app.scheduler.auto-pause-cron:* * * * * *}")
     public void scheduledAutoPause() {
-        runAutoPause();
+        runAutoPause(false);
     }
 
     public SchedulerRunResult runDeployFeeTimeoutCancel() {
+        return runDeployFeeTimeoutCancel(true);
+    }
+
+    private SchedulerRunResult runDeployFeeTimeoutCancel(boolean writeNoopLog) {
         var result = new AtomicReference<SchedulerRunResult>();
-        var acquired = schedulerLockTemplate.runWithLock(DEPLOY_FEE_TIMEOUT_LOCK, LOCK_TTL,
-                () -> result.set(doDeployFeeTimeoutCancel()));
+        var acquired = schedulerLockTemplate.runWithLock(DEPLOY_FEE_TIMEOUT_LOCK, DEPLOY_FEE_TIMEOUT_LOCK_TTL,
+                () -> result.set(doDeployFeeTimeoutCancel(writeNoopLog)));
         if (!acquired) {
             return skipped(SchedulerTaskNames.DEPLOY_FEE_TIMEOUT_CANCEL);
         }
@@ -70,67 +79,104 @@ public class RentalActivationScheduler {
     }
 
     public SchedulerRunResult runAutoPause() {
+        return runAutoPause(true);
+    }
+
+    private SchedulerRunResult runAutoPause(boolean writeNoopLog) {
         var result = new AtomicReference<SchedulerRunResult>();
-        var acquired = schedulerLockTemplate.runWithLock(AUTO_PAUSE_LOCK, LOCK_TTL,
-                () -> result.set(doAutoPause()));
+        var acquired = schedulerLockTemplate.runWithLock(AUTO_PAUSE_LOCK, AUTO_PAUSE_LOCK_TTL,
+                () -> result.set(doAutoPause(writeNoopLog)));
         if (!acquired) {
             return skipped(SchedulerTaskNames.AUTO_PAUSE);
         }
         return result.get();
     }
 
-    private SchedulerRunResult doDeployFeeTimeoutCancel() {
+    private SchedulerRunResult doDeployFeeTimeoutCancel(boolean writeNoopLog) {
         var taskName = SchedulerTaskNames.DEPLOY_FEE_TIMEOUT_CANCEL;
-        var schedulerLog = schedulerLogService.start(taskName);
         var successCount = 0;
         var failCount = 0;
+        var totalCount = 0;
         var errors = new ArrayList<String>();
+        SchedulerLog schedulerLog = null;
         var timeoutMinutes = sysConfigService.getInteger(
-                SysConfigDefaults.ORDER_PENDING_ACTIVATION_TIMEOUT_MINUTES, 60);
-        var cutoffTime = DateTimeUtils.now().minusMinutes(timeoutMinutes);
-        var orders = rentalOrderMapper.selectList(new LambdaQueryWrapper<RentalOrder>()
-                .eq(RentalOrder::getOrderStatus, RentalOrderStatus.PENDING_ACTIVATION.name())
-                .le(RentalOrder::getApiGeneratedAt, cutoffTime)
-                .orderByAsc(RentalOrder::getId));
-        for (var order : orders) {
-            try {
-                processor.cancelDeployFeeTimeout(order.getId(), cutoffTime);
-                successCount++;
-            } catch (Exception ex) {
-                failCount++;
-                errors.add(order.getOrderNo() + ":" + ex.getMessage());
-                log.warn("Deploy fee timeout cancel failed, orderNo={}", order.getOrderNo(), ex);
-            }
+                SysConfigDefaults.ORDER_PENDING_ACTIVATION_TIMEOUT_MINUTES,
+                DEFAULT_DEPLOY_FEE_TIMEOUT_MINUTES);
+        if (timeoutMinutes == null || timeoutMinutes <= 0) {
+            log.warn("Invalid deploy fee timeout config, fallback to {} minutes", DEFAULT_DEPLOY_FEE_TIMEOUT_MINUTES);
+            timeoutMinutes = DEFAULT_DEPLOY_FEE_TIMEOUT_MINUTES;
         }
+        var cutoffTime = DateTimeUtils.now().minusMinutes(timeoutMinutes);
+        var lastOrderId = 0L;
+        java.util.List<RentalOrder> orders;
+        do {
+            orders = rentalOrderMapper.selectList(new LambdaQueryWrapper<RentalOrder>()
+                    .gt(RentalOrder::getId, lastOrderId)
+                    .eq(RentalOrder::getOrderStatus, RentalOrderStatus.PENDING_ACTIVATION.name())
+                    .le(RentalOrder::getApiGeneratedAt, cutoffTime)
+                    .orderByAsc(RentalOrder::getId)
+                    .last("LIMIT " + DEPLOY_FEE_TIMEOUT_PAGE_SIZE));
+            if (schedulerLog == null && (writeNoopLog || !orders.isEmpty())) {
+                schedulerLog = schedulerLogService.start(taskName);
+            }
+            for (var order : orders) {
+                lastOrderId = order.getId();
+                totalCount++;
+                try {
+                    processor.cancelDeployFeeTimeout(order.getId(), cutoffTime);
+                    successCount++;
+                } catch (Exception ex) {
+                    failCount++;
+                    errors.add(order.getOrderNo() + ":" + ex.getMessage());
+                    log.warn("Deploy fee timeout cancel failed, orderNo={}", order.getOrderNo(), ex);
+                }
+            }
+        } while (orders.size() == DEPLOY_FEE_TIMEOUT_PAGE_SIZE);
         var errorMessage = errors.isEmpty() ? null : String.join("; ", errors);
-        schedulerLogService.finish(schedulerLog, orders.size(), successCount, failCount, errorMessage);
-        return result(taskName, orders.size(), successCount, failCount, errorMessage);
+        if (schedulerLog != null) {
+            schedulerLogService.finish(schedulerLog, totalCount, successCount, failCount, errorMessage);
+        }
+        return result(taskName, totalCount, successCount, failCount, errorMessage);
     }
 
-    private SchedulerRunResult doAutoPause() {
+    private SchedulerRunResult doAutoPause(boolean writeNoopLog) {
         var taskName = SchedulerTaskNames.AUTO_PAUSE;
-        var schedulerLog = schedulerLogService.start(taskName);
         var successCount = 0;
         var failCount = 0;
+        var totalCount = 0;
         var errors = new ArrayList<String>();
+        SchedulerLog schedulerLog = null;
         var now = DateTimeUtils.now();
-        var orders = rentalOrderMapper.selectList(new LambdaQueryWrapper<RentalOrder>()
-                .in(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name(), RentalOrderStatus.ACTIVATING.name())
-                .le(RentalOrder::getAutoPauseAt, now)
-                .orderByAsc(RentalOrder::getId));
-        for (var order : orders) {
-            try {
-                processor.autoPause(order.getId(), now);
-                successCount++;
-            } catch (Exception ex) {
-                failCount++;
-                errors.add(order.getOrderNo() + ":" + ex.getMessage());
-                log.warn("Auto pause failed, orderNo={}", order.getOrderNo(), ex);
+        var lastOrderId = 0L;
+        java.util.List<RentalOrder> orders;
+        do {
+            orders = rentalOrderMapper.selectList(new LambdaQueryWrapper<RentalOrder>()
+                    .gt(RentalOrder::getId, lastOrderId)
+                    .in(RentalOrder::getOrderStatus, RentalOrderStatus.RUNNING.name(), RentalOrderStatus.ACTIVATING.name())
+                    .le(RentalOrder::getAutoPauseAt, now)
+                    .orderByAsc(RentalOrder::getId)
+                    .last("LIMIT " + AUTO_PAUSE_PAGE_SIZE));
+            if (schedulerLog == null && (writeNoopLog || !orders.isEmpty())) {
+                schedulerLog = schedulerLogService.start(taskName);
             }
-        }
+            for (var order : orders) {
+                lastOrderId = order.getId();
+                totalCount++;
+                try {
+                    processor.autoPause(order.getId(), now);
+                    successCount++;
+                } catch (Exception ex) {
+                    failCount++;
+                    errors.add(order.getOrderNo() + ":" + ex.getMessage());
+                    log.warn("Auto pause failed, orderNo={}", order.getOrderNo(), ex);
+                }
+            }
+        } while (orders.size() == AUTO_PAUSE_PAGE_SIZE);
         var errorMessage = errors.isEmpty() ? null : String.join("; ", errors);
-        schedulerLogService.finish(schedulerLog, orders.size(), successCount, failCount, errorMessage);
-        return result(taskName, orders.size(), successCount, failCount, errorMessage);
+        if (schedulerLog != null) {
+            schedulerLogService.finish(schedulerLog, totalCount, successCount, failCount, errorMessage);
+        }
+        return result(taskName, totalCount, successCount, failCount, errorMessage);
     }
 
     private SchedulerRunResult result(String taskName, int totalCount, int successCount, int failCount,

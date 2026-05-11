@@ -745,7 +745,7 @@ app_user.status=1
 | withdraw.fee_free_threshold | 100 | 免手续费阈值 |
 | withdraw.fee_rate | 0.05 | 提现手续费率 |
 | withdraw.max_daily_amount | 100000 | 每日提现上限 |
-| order.pending_activation_timeout_minutes | 60 | API 待激活超时取消分钟数 |
+| order.pending_activation_timeout_minutes | 15 | API 待激活超时取消分钟数 |
 | email_code.rate_limit_per_minute | 5 | 邮箱验证码每分钟发送上限 |
 
 闭环：

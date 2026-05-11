@@ -2,6 +2,7 @@ package com.compute.rental.scheduler;
 
 import com.compute.rental.common.api.ApiResponse;
 import com.compute.rental.common.page.PageResult;
+import com.compute.rental.modules.system.dto.SchedulerConfigResponse;
 import com.compute.rental.modules.system.dto.SchedulerLogResponse;
 import com.compute.rental.modules.system.service.AdminLogService;
 import com.compute.rental.modules.system.service.SchedulerLogService;
@@ -9,6 +10,8 @@ import com.compute.rental.security.CurrentUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.core.env.Environment;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,24 +23,47 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/scheduler")
 public class AdminSchedulerController {
 
+    private static final String DEFAULT_DAILY_PROFIT_CRON = "0 0 0 * * *";
+    private static final String DEFAULT_ORDER_EXPIRE_SETTLE_CRON = "0 * * * * *";
+    private static final String DEFAULT_AUTO_PAUSE_CRON = "* * * * * *";
+    private static final String DEFAULT_DEPLOY_FEE_TIMEOUT_CANCEL_CRON = "* * * * * *";
+    private static final String DEFAULT_COMMISSION_GENERATE_CRON = "0 */5 * * * *";
+    private static final String DEFAULT_AUTO_PAUSE_DELAY = "24h";
+
     private final RentalActivationScheduler rentalActivationScheduler;
     private final ProfitSettlementScheduler profitSettlementScheduler;
     private final CommissionGenerateScheduler commissionGenerateScheduler;
     private final AdminLogService adminLogService;
     private final SchedulerLogService schedulerLogService;
+    private final Environment environment;
 
     public AdminSchedulerController(
             RentalActivationScheduler rentalActivationScheduler,
             ProfitSettlementScheduler profitSettlementScheduler,
             CommissionGenerateScheduler commissionGenerateScheduler,
             AdminLogService adminLogService,
-            SchedulerLogService schedulerLogService
+            SchedulerLogService schedulerLogService,
+            Environment environment
     ) {
         this.rentalActivationScheduler = rentalActivationScheduler;
         this.profitSettlementScheduler = profitSettlementScheduler;
         this.commissionGenerateScheduler = commissionGenerateScheduler;
         this.adminLogService = adminLogService;
         this.schedulerLogService = schedulerLogService;
+        this.environment = environment;
+    }
+
+    @Operation(summary = "Admin scheduler runtime config")
+    @GetMapping("/config")
+    public ApiResponse<SchedulerConfigResponse> config() {
+        return ApiResponse.success(new SchedulerConfigResponse(
+                property("app.scheduler.daily-profit-cron", DEFAULT_DAILY_PROFIT_CRON),
+                property("app.scheduler.order-expire-settle-cron", DEFAULT_ORDER_EXPIRE_SETTLE_CRON),
+                property("app.scheduler.auto-pause-cron", DEFAULT_AUTO_PAUSE_CRON),
+                deployFeeTimeoutCancelCron(),
+                property("app.scheduler.commission-generate-cron", DEFAULT_COMMISSION_GENERATE_CRON),
+                property("app.order.auto-pause-delay", DEFAULT_AUTO_PAUSE_DELAY)
+        ));
     }
 
     @Operation(summary = "Admin scheduler logs")
@@ -100,5 +126,18 @@ public class AdminSchedulerController {
         var admin = CurrentUser.requiredAdmin();
         adminLogService.log(admin.id(), AdminLogService.RUN_SCHEDULER, "scheduler_log", null,
                 null, result.toString(), "Run scheduler " + result.taskName(), adminLogService.clientIp(request));
+    }
+
+    private String deployFeeTimeoutCancelCron() {
+        var value = environment.getProperty("app.scheduler.deploy-fee-timeout-cancel-cron");
+        if (StringUtils.hasText(value)) {
+            return value.trim();
+        }
+        return property("app.scheduler.activation-timeout-cancel-cron", DEFAULT_DEPLOY_FEE_TIMEOUT_CANCEL_CRON);
+    }
+
+    private String property(String key, String defaultValue) {
+        var value = environment.getProperty(key);
+        return StringUtils.hasText(value) ? value.trim() : defaultValue;
     }
 }

@@ -93,7 +93,8 @@ class RentalActivationSchedulerProcessorTest {
     @Test
     void autoPauseShouldPauseRunningOrderAndCredential() {
         var now = LocalDateTime.now();
-        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.RUNNING, now.minusMinutes(1)));
+        var autoPauseAt = now.minusMinutes(1);
+        when(rentalOrderMapper.selectById(1L)).thenReturn(order(RentalOrderStatus.RUNNING, autoPauseAt));
         when(apiCredentialMapper.selectOne(any(Wrapper.class))).thenReturn(credential(ApiTokenStatus.ACTIVE));
         when(rentalOrderMapper.update(any(), any(Wrapper.class))).thenReturn(1);
         when(apiCredentialMapper.update(any(), any(Wrapper.class))).thenReturn(1);
@@ -102,7 +103,7 @@ class RentalActivationSchedulerProcessorTest {
 
         verify(rentalOrderMapper).update(any(), any(Wrapper.class));
         verify(apiCredentialMapper).update(any(), any(Wrapper.class));
-        verify(runSegmentService).closeOpenSegment(eq(1L), eq(now), eq(RunSegmentCloseReason.AUTO_PAUSE));
+        verify(runSegmentService).closeOpenSegment(eq(1L), eq(autoPauseAt), eq(RunSegmentCloseReason.AUTO_PAUSE));
         verify(walletService, never()).credit(any(), any(), any(), any(), any(), any());
     }
 
