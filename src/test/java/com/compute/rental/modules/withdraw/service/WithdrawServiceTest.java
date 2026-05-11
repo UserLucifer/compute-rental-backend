@@ -24,6 +24,7 @@ import com.compute.rental.modules.system.service.SysConfigDefaults;
 import com.compute.rental.modules.system.service.SysConfigService;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.wallet.entity.UserWallet;
+import com.compute.rental.modules.wallet.entity.UserWithdrawAddress;
 import com.compute.rental.modules.wallet.entity.WalletTransaction;
 import com.compute.rental.modules.wallet.entity.WithdrawOrder;
 import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
@@ -73,6 +74,9 @@ class WithdrawServiceTest {
     private WithdrawAddressValidator addressValidator;
 
     @Mock
+    private WithdrawAddressService withdrawAddressService;
+
+    @Mock
     private RedisLockClient redisLockClient;
 
     @Captor
@@ -99,7 +103,6 @@ class WithdrawServiceTest {
     void createOrderShouldFreezeApplyAmount() {
         var savedOrder = new AtomicReference<WithdrawOrder>();
         mockWithdrawConfigs();
-        when(withdrawOrderMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
         when(addressValidator.requireValid("TRC20", "T123456789ABCDEFGHJKLMNPQRSTUVWXy")).thenReturn("TRC20");
         when(userWalletMapper.selectOne(any(Wrapper.class))).thenReturn(wallet());
         doAnswer(invocation -> {
@@ -119,7 +122,8 @@ class WithdrawServiceTest {
                 "name",
                 "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
                 new BigDecimal("50.00000000"),
-                "REQ001"
+                "REQ001",
+                null
         ));
 
         verify(withdrawOrderMapper).insert(withdrawOrderCaptor.capture());
@@ -143,12 +147,47 @@ class WithdrawServiceTest {
                 "name",
                 "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
                 new BigDecimal("50.00000000"),
-                "REQ001"
+                "REQ001",
+                null
         ));
 
         assertThat(response.withdrawNo()).isEqualTo("WD001");
         verify(withdrawOrderMapper, never()).insert(any(WithdrawOrder.class));
         verify(walletService, never()).freeze(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createOrderShouldUseWithdrawAddressIdSnapshot() {
+        var savedOrder = new AtomicReference<WithdrawOrder>();
+        mockWithdrawConfigs();
+        when(withdrawAddressService.requireAddress(10L, 7L)).thenReturn(address());
+        when(userWalletMapper.selectOne(any(Wrapper.class))).thenReturn(wallet());
+        doAnswer(invocation -> {
+            var order = invocation.getArgument(0, WithdrawOrder.class);
+            order.setId(1L);
+            savedOrder.set(order);
+            return 1;
+        }).when(withdrawOrderMapper).insert(any(WithdrawOrder.class));
+        when(walletService.freeze(eq(10L), any(BigDecimal.class), eq(WalletBusinessType.WITHDRAW),
+                any(), eq("FREEZE"), any())).thenReturn(tx("WT_FREEZE"));
+        when(withdrawOrderMapper.update(any(), any(Wrapper.class))).thenReturn(1);
+        when(withdrawOrderMapper.selectOne(any(Wrapper.class))).thenAnswer(invocation -> savedOrder.get());
+
+        withdrawService.createOrder(10L, new CreateWithdrawOrderRequest(
+                null,
+                null,
+                null,
+                new BigDecimal("50.00000000"),
+                "REQ001",
+                7L
+        ));
+
+        verify(withdrawOrderMapper).insert(withdrawOrderCaptor.capture());
+        var inserted = withdrawOrderCaptor.getValue();
+        assertThat(inserted.getWithdrawAddressId()).isEqualTo(7L);
+        assertThat(inserted.getNetwork()).isEqualTo("TRC20");
+        assertThat(inserted.getAccountName()).isEqualTo("saved name");
+        assertThat(inserted.getAccountNo()).isEqualTo("T123456789ABCDEFGHJKLMNPQRSTUVWXy");
     }
 
     @Test
@@ -160,7 +199,8 @@ class WithdrawServiceTest {
                 "name",
                 "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
                 new BigDecimal("50.00000000"),
-                "REQ001"
+                "REQ001",
+                null
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
@@ -180,7 +220,8 @@ class WithdrawServiceTest {
                 null,
                 "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
                 new BigDecimal("9.99000000"),
-                "REQ001"
+                "REQ001",
+                null
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
@@ -192,9 +233,6 @@ class WithdrawServiceTest {
     void createOrderShouldRejectInvalidAddress() {
         when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.WITHDRAW_MIN_AMOUNT), any(BigDecimal.class)))
                 .thenReturn(new BigDecimal("10"));
-        when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.WITHDRAW_MAX_DAILY_AMOUNT), any(BigDecimal.class)))
-                .thenReturn(new BigDecimal("100000"));
-        when(withdrawOrderMapper.selectList(any(Wrapper.class))).thenReturn(List.of());
         when(addressValidator.requireValid("TRC20", "bad")).thenThrow(new BusinessException(ErrorCode.WITHDRAW_ADDRESS_INVALID));
 
         assertThatThrownBy(() -> withdrawService.createOrder(10L, new CreateWithdrawOrderRequest(
@@ -202,32 +240,12 @@ class WithdrawServiceTest {
                 null,
                 "bad",
                 new BigDecimal("10.00000000"),
-                "REQ001"
+                "REQ001",
+                null
         )))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.WITHDRAW_ADDRESS_INVALID);
-        verify(walletService, never()).freeze(any(), any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void createOrderShouldRejectDailyLimitExceeded() {
-        when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.WITHDRAW_MIN_AMOUNT), any(BigDecimal.class)))
-                .thenReturn(new BigDecimal("10"));
-        when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.WITHDRAW_MAX_DAILY_AMOUNT), any(BigDecimal.class)))
-                .thenReturn(new BigDecimal("100"));
-        when(withdrawOrderMapper.selectList(any(Wrapper.class))).thenReturn(List.of(order(WithdrawOrderStatus.PENDING_REVIEW, "80.00000000")));
-
-        assertThatThrownBy(() -> withdrawService.createOrder(10L, new CreateWithdrawOrderRequest(
-                "TRC20",
-                null,
-                "T123456789ABCDEFGHJKLMNPQRSTUVWXy",
-                new BigDecimal("30.00000000"),
-                "REQ001"
-        )))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.WITHDRAW_DAILY_LIMIT_EXCEEDED);
         verify(walletService, never()).freeze(any(), any(), any(), any(), any(), any());
     }
 
@@ -340,8 +358,6 @@ class WithdrawServiceTest {
     private void mockWithdrawConfigs() {
         when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.WITHDRAW_MIN_AMOUNT), any(BigDecimal.class)))
                 .thenReturn(new BigDecimal("10"));
-        when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.WITHDRAW_MAX_DAILY_AMOUNT), any(BigDecimal.class)))
-                .thenReturn(new BigDecimal("100000"));
         when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.WITHDRAW_FEE_FREE_THRESHOLD), any(BigDecimal.class)))
                 .thenReturn(new BigDecimal("100"));
         when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.WITHDRAW_FEE_RATE), any(BigDecimal.class)))
@@ -354,6 +370,18 @@ class WithdrawServiceTest {
         wallet.setUserId(10L);
         wallet.setStatus(CommonStatus.ENABLED.value());
         return wallet;
+    }
+
+    private UserWithdrawAddress address() {
+        var address = new UserWithdrawAddress();
+        address.setId(7L);
+        address.setUserId(10L);
+        address.setNetwork("TRC20");
+        address.setAccountName("saved name");
+        address.setAccountNo("T123456789ABCDEFGHJKLMNPQRSTUVWXy");
+        address.setIsDefault(1);
+        address.setStatus(CommonStatus.ENABLED.value());
+        return address;
     }
 
     private WithdrawOrder order(WithdrawOrderStatus status, String applyAmount) {

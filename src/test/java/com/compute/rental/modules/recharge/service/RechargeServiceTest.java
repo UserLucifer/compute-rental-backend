@@ -104,7 +104,7 @@ class RechargeServiceTest {
 
     @Test
     void createOrderShouldSubmitRechargeOrder() {
-        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel(new BigDecimal("600.00000000")));
+        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel());
         when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.RECHARGE_MIN_AMOUNT), any(BigDecimal.class)))
                 .thenReturn(new BigDecimal("500.00000000"));
         when(rechargeOrderMapper.selectOne(any(Wrapper.class))).thenReturn(null);
@@ -152,7 +152,7 @@ class RechargeServiceTest {
 
     @Test
     void listEnabledChannelsUsesRequestedTranslation() {
-        var channel = channel(new BigDecimal("100.00000000"));
+        var channel = channel();
         var translation = new RechargeChannelTranslation();
         translation.setChannelId(1L);
         translation.setLocale("en-US");
@@ -160,35 +160,19 @@ class RechargeServiceTest {
         translation.setAccountName("Receiving account");
         when(rechargeChannelMapper.selectList(any())).thenReturn(List.of(channel));
         when(rechargeChannelTranslationMapper.selectList(any())).thenReturn(List.of(translation));
-        when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.RECHARGE_MIN_AMOUNT), any(BigDecimal.class)))
-                .thenReturn(new BigDecimal("500.00000000"));
 
         var channels = rechargeService.listEnabledChannels("en-US");
 
         assertThat(channels).hasSize(1);
         assertThat(channels.get(0).channelName()).isEqualTo("USDT TRC20");
         assertThat(channels.get(0).accountName()).isEqualTo("Receiving account");
-        assertThat(channels.get(0).minAmount()).isEqualByComparingTo("500.00000000");
         assertThat(channels.get(0).locale()).isEqualTo("en-US");
         assertThat(channels.get(0).localeFallback()).isFalse();
     }
 
     @Test
-    void listEnabledChannelsShouldReturnEffectiveMinAmountFromSysConfig() {
-        var channel = channel(new BigDecimal("1.00000000"));
-        when(rechargeChannelMapper.selectList(any())).thenReturn(List.of(channel));
-        when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.RECHARGE_MIN_AMOUNT), any(BigDecimal.class)))
-                .thenReturn(new BigDecimal("500.00000000"));
-
-        var channels = rechargeService.listEnabledChannels("zh-CN");
-
-        assertThat(channels).hasSize(1);
-        assertThat(channels.get(0).minAmount()).isEqualByComparingTo("500.00000000");
-    }
-
-    @Test
     void updateChannelTranslationCreatesEnglishTranslation() {
-        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel(new BigDecimal("100.00000000")));
+        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel());
         when(rechargeChannelTranslationMapper.selectOne(any())).thenReturn(null);
 
         var result = rechargeService.updateChannelTranslation(
@@ -224,14 +208,14 @@ class RechargeServiceTest {
     }
 
     @Test
-    void createOrderShouldRejectAmountBelowEffectiveMinimum() {
-        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel(new BigDecimal("600.00000000")));
+    void createOrderShouldRejectAmountBelowSystemMinimum() {
+        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel());
         when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.RECHARGE_MIN_AMOUNT), any(BigDecimal.class)))
                 .thenReturn(new BigDecimal("500.00000000"));
 
         assertThatThrownBy(() -> rechargeService.createOrder(10L, new CreateRechargeOrderRequest(
                 1L,
-                new BigDecimal("599.00000000"),
+                new BigDecimal("499.99999999"),
                 null,
                 null,
                 null,
@@ -244,8 +228,28 @@ class RechargeServiceTest {
     }
 
     @Test
+    void createOrderShouldRejectWhenSubmittedOrderExists() {
+        when(rechargeOrderMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(rechargeOrderMapper.selectCount(any(Wrapper.class))).thenReturn(1L);
+
+        assertThatThrownBy(() -> rechargeService.createOrder(10L, new CreateRechargeOrderRequest(
+                1L,
+                new BigDecimal("500.00000000"),
+                null,
+                null,
+                null,
+                "REQ001"
+        )))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.RECHARGE_PENDING_EXISTS);
+        verify(rechargeChannelMapper, never()).selectById(any());
+        verify(rechargeOrderMapper, never()).insert(any(RechargeOrder.class));
+    }
+
+    @Test
     void createOrderShouldRejectDuplicateExternalTxNo() {
-        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel(null));
+        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel());
         when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.RECHARGE_MIN_AMOUNT), any(BigDecimal.class)))
                 .thenReturn(new BigDecimal("500.00000000"));
         when(rechargeOrderMapper.selectOne(any(Wrapper.class))).thenReturn(null, order(RechargeOrderStatus.SUBMITTED));
@@ -262,6 +266,30 @@ class RechargeServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.RECHARGE_EXTERNAL_TX_NO_EXISTS);
         verify(userWalletMapper, never()).selectOne(any(Wrapper.class));
+    }
+
+    @Test
+    void createOrderShouldAllowExternalTxNoFromCanceledOrder() {
+        when(rechargeChannelMapper.selectById(1L)).thenReturn(channel());
+        when(sysConfigService.getBigDecimal(eq(SysConfigDefaults.RECHARGE_MIN_AMOUNT), any(BigDecimal.class)))
+                .thenReturn(new BigDecimal("500.00000000"));
+        when(rechargeOrderMapper.selectOne(any(Wrapper.class))).thenReturn(null, null);
+        when(rechargeOrderMapper.selectCount(any(Wrapper.class))).thenReturn(0L);
+        when(userWalletMapper.selectOne(any(Wrapper.class))).thenReturn(wallet());
+        when(rechargeOrderMapper.insert(any(RechargeOrder.class))).thenReturn(1);
+
+        var response = rechargeService.createOrder(10L, new CreateRechargeOrderRequest(
+                1L,
+                new BigDecimal("500.00000000"),
+                "tx001",
+                null,
+                null,
+                "REQ001"
+        ));
+
+        verify(rechargeOrderMapper).insert(rechargeOrderCaptor.capture());
+        assertThat(rechargeOrderCaptor.getValue().getExternalTxNo()).isEqualTo("tx001");
+        assertThat(response.status()).isEqualTo(RechargeOrderStatus.SUBMITTED.name());
     }
 
     @Test
@@ -392,7 +420,7 @@ class RechargeServiceTest {
                 .isEqualTo(ErrorCode.RECHARGE_ORDER_NOT_FOUND);
     }
 
-    private RechargeChannel channel(BigDecimal minAmount) {
+    private RechargeChannel channel() {
         var channel = new RechargeChannel();
         channel.setId(1L);
         channel.setChannelCode("USDT_TRC20");
@@ -400,7 +428,6 @@ class RechargeServiceTest {
         channel.setNetwork("TRC20");
         channel.setDisplayUrl("https://example.test/qr.png");
         channel.setAccountNo("TXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
-        channel.setMinAmount(minAmount);
         channel.setStatus(CommonStatus.ENABLED.value());
         return channel;
     }

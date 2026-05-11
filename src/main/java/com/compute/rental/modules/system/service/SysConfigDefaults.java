@@ -7,7 +7,6 @@ public final class SysConfigDefaults {
     public static final String WITHDRAW_MIN_AMOUNT = "withdraw.min_amount";
     public static final String WITHDRAW_FEE_FREE_THRESHOLD = "withdraw.fee_free_threshold";
     public static final String WITHDRAW_FEE_RATE = "withdraw.fee_rate";
-    public static final String WITHDRAW_MAX_DAILY_AMOUNT = "withdraw.max_daily_amount";
     public static final String RECHARGE_MIN_AMOUNT = "recharge.min_amount";
     public static final String ORDER_ACTIVATION_TIMEOUT_MINUTES = "order.activation_timeout_minutes";
     public static final String ORDER_PENDING_ACTIVATION_TIMEOUT_MINUTES = "order.pending_activation_timeout_minutes";
@@ -17,7 +16,6 @@ public final class SysConfigDefaults {
             WITHDRAW_MIN_AMOUNT, "10",
             WITHDRAW_FEE_FREE_THRESHOLD, "100",
             WITHDRAW_FEE_RATE, "0.05",
-            WITHDRAW_MAX_DAILY_AMOUNT, "100000",
             RECHARGE_MIN_AMOUNT, "500",
             ORDER_ACTIVATION_TIMEOUT_MINUTES, "15",
             ORDER_PENDING_ACTIVATION_TIMEOUT_MINUTES, "15",

@@ -22,20 +22,17 @@ INSERT INTO `commission_rule` (`level_no`, `commission_rate`, `status`) VALUES
 
 INSERT INTO `recharge_channel` (
   `channel_code`, `channel_name`, `network`, `display_url`, `account_name`, `account_no`,
-  `min_amount`, `max_amount`, `fee_rate`, `sort_no`, `status`
+  `sort_no`, `status`
 ) VALUES
-('USDT_TRC20', 'USDT-TRC20', 'TRC20', NULL, 'Configure receiving account', 'Configure TRC20 receiving address', 100.00000000, 100000.00000000, 0.00000000, 1, 0),
-('USDT_ERC20', 'USDT-ERC20', 'ERC20', NULL, 'Configure receiving account', 'Configure ERC20 receiving address', 100.00000000, 100000.00000000, 0.00000000, 2, 0),
-('USDT_BEP20', 'USDT-BEP20', 'BEP20', NULL, 'Configure receiving account', 'Configure BEP20 receiving address', 100.00000000, 100000.00000000, 0.00000000, 3, 0)
+('USDT_TRC20', 'USDT-TRC20', 'TRC20', NULL, 'Configure receiving account', 'Configure TRC20 receiving address', 1, 0),
+('USDT_ERC20', 'USDT-ERC20', 'ERC20', NULL, 'Configure receiving account', 'Configure ERC20 receiving address', 2, 0),
+('USDT_BEP20', 'USDT-BEP20', 'BEP20', NULL, 'Configure receiving account', 'Configure BEP20 receiving address', 3, 0)
 ON DUPLICATE KEY UPDATE
   `channel_name` = VALUES(`channel_name`),
   `network` = VALUES(`network`),
   `display_url` = VALUES(`display_url`),
   `account_name` = VALUES(`account_name`),
   `account_no` = VALUES(`account_no`),
-  `min_amount` = VALUES(`min_amount`),
-  `max_amount` = VALUES(`max_amount`),
-  `fee_rate` = VALUES(`fee_rate`),
   `sort_no` = VALUES(`sort_no`);
 
 INSERT INTO `recharge_channel_translation` (`channel_id`, `locale`, `channel_name`, `account_name`)
@@ -267,7 +264,6 @@ INSERT INTO `sys_config` (`config_key`, `config_value`, `config_desc`) VALUES
 ('withdraw.min_amount',              '10',     '最低提现金额 USDT'),
 ('withdraw.fee_free_threshold',      '100',    '免手续费门槛 USDT，大于等于此金额免费'),
 ('withdraw.fee_rate',                '0.05',   '提现手续费比例，小于门槛时收取（5%）'),
-('withdraw.max_daily_amount',        '100000', '每日累计提现上限 USDT'),
 ('recharge.min_amount',              '500',    '全局最低充值金额 USDT'),
 ('order.activation_timeout_minutes', '15',     '待激活订单超时自动取消时间（分钟），超时退还机器费'),
 ('order.pending_activation_timeout_minutes', '15', '待激活订单超时自动取消时间（分钟），兼容当前阶段配置键'),
@@ -4505,4 +4501,3 @@ WHERE ro.`profit_start_at` IS NOT NULL
     FROM `rental_order_run_segment` existing_segment
     WHERE existing_segment.`rental_order_id` = ro.`id`
   );
-

@@ -20,6 +20,7 @@ import com.compute.rental.modules.user.entity.AppUser;
 import com.compute.rental.modules.user.mapper.AppUserMapper;
 import com.compute.rental.modules.user.support.AppUserSearchSupport;
 import com.compute.rental.modules.wallet.entity.UserWallet;
+import com.compute.rental.modules.wallet.entity.UserWithdrawAddress;
 import com.compute.rental.modules.wallet.entity.WithdrawOrder;
 import com.compute.rental.modules.wallet.mapper.UserWalletMapper;
 import com.compute.rental.modules.wallet.mapper.WithdrawOrderMapper;
@@ -37,6 +38,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.dao.DuplicateKeyException;
@@ -55,18 +57,13 @@ public class WithdrawService {
     private static final String UNFREEZE_ACTION = "UNFREEZE";
     private static final String PAID_ACTION = "PAID";
     private static final Duration WITHDRAW_OPERATION_LOCK_TTL = Duration.ofMinutes(1);
-    private static final List<String> DAILY_LIMIT_STATUSES = List.of(
-            WithdrawOrderStatus.PENDING_REVIEW.name(),
-            WithdrawOrderStatus.APPROVED.name(),
-            WithdrawOrderStatus.PAID.name()
-    );
-
     private final WithdrawOrderMapper withdrawOrderMapper;
     private final UserWalletMapper userWalletMapper;
     private final AppUserMapper appUserMapper;
     private final SysConfigService sysConfigService;
     private final WalletService walletService;
     private final WithdrawAddressValidator addressValidator;
+    private final WithdrawAddressService withdrawAddressService;
     private final RedisLockClient redisLockClient;
 
     public WithdrawService(
@@ -76,6 +73,7 @@ public class WithdrawService {
             SysConfigService sysConfigService,
             WalletService walletService,
             WithdrawAddressValidator addressValidator,
+            WithdrawAddressService withdrawAddressService,
             RedisLockClient redisLockClient
     ) {
         this.withdrawOrderMapper = withdrawOrderMapper;
@@ -84,6 +82,7 @@ public class WithdrawService {
         this.sysConfigService = sysConfigService;
         this.walletService = walletService;
         this.addressValidator = addressValidator;
+        this.withdrawAddressService = withdrawAddressService;
         this.redisLockClient = redisLockClient;
     }
 
@@ -104,12 +103,7 @@ public class WithdrawService {
         if (amount.compareTo(minAmount) < 0) {
             throw new BusinessException(ErrorCode.WITHDRAW_AMOUNT_BELOW_MIN);
         }
-        var maxDailyAmount = sysConfigService.getBigDecimal(SysConfigDefaults.WITHDRAW_MAX_DAILY_AMOUNT, new BigDecimal("100000"));
-        var todayAmount = todayActiveWithdrawAmount(userId);
-        if (todayAmount.add(amount).compareTo(maxDailyAmount) > 0) {
-            throw new BusinessException(ErrorCode.WITHDRAW_DAILY_LIMIT_EXCEEDED);
-        }
-        var network = addressValidator.requireValid(request.network(), request.accountNo());
+        var destination = resolveDestination(userId, request);
         var feeAmount = calculateFee(amount);
         var actualAmount = amount.subtract(feeAmount);
         var wallet = requireWallet(userId);
@@ -120,11 +114,12 @@ public class WithdrawService {
         order.setClientRequestId(clientRequestId);
         order.setUserId(userId);
         order.setWalletId(wallet.getId());
+        order.setWithdrawAddressId(destination.addressId());
         order.setCurrency(CURRENCY_USDT);
         order.setWithdrawMethod(WITHDRAW_METHOD_USDT);
-        order.setNetwork(network);
-        order.setAccountName(trimToNull(request.accountName()));
-        order.setAccountNo(request.accountNo().trim());
+        order.setNetwork(destination.network());
+        order.setAccountName(destination.accountName());
+        order.setAccountNo(destination.accountNo());
         order.setApplyAmount(amount);
         order.setFeeAmount(feeAmount);
         order.setActualAmount(actualAmount);
@@ -296,19 +291,6 @@ public class WithdrawService {
         return MoneyUtils.scale(applyAmount.multiply(rate));
     }
 
-    private BigDecimal todayActiveWithdrawAmount(Long userId) {
-        var start = DateTimeUtils.today().atStartOfDay();
-        var end = start.plusDays(1);
-        return withdrawOrderMapper.selectList(new LambdaQueryWrapper<WithdrawOrder>()
-                        .eq(WithdrawOrder::getUserId, userId)
-                        .in(WithdrawOrder::getStatus, DAILY_LIMIT_STATUSES)
-                        .ge(WithdrawOrder::getCreatedAt, start)
-                        .lt(WithdrawOrder::getCreatedAt, end))
-                .stream()
-                .map(WithdrawOrder::getApplyAmount)
-                .reduce(MoneyUtils.ZERO, BigDecimal::add);
-    }
-
     private void updateStatus(WithdrawOrder order, WithdrawOrderStatus nextStatus, Long reviewedBy, String reviewRemark, String payProofNo) {
         var now = DateTimeUtils.now();
         var update = new LambdaUpdateWrapper<WithdrawOrder>()
@@ -406,10 +388,19 @@ public class WithdrawService {
     }
 
     private void validateCreateOrderIdempotency(WithdrawOrder existing, CreateWithdrawOrderRequest request) {
-        var requestNetwork = trimToNull(request.network());
-        if (!equalsIgnoreCase(existing.getNetwork(), requestNetwork)
-                || !java.util.Objects.equals(existing.getAccountName(), trimToNull(request.accountName()))
-                || !java.util.Objects.equals(existing.getAccountNo(), request.accountNo() == null ? null : request.accountNo().trim())
+        if (existing.getWithdrawAddressId() != null || request.withdrawAddressId() != null) {
+            if (!Objects.equals(existing.getWithdrawAddressId(), request.withdrawAddressId())
+                    || requirePositiveAmount(request.applyAmount()).compareTo(existing.getApplyAmount()) != 0) {
+                throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT, "客户端请求号已被其他提现订单使用");
+            }
+            return;
+        }
+        var network = trimToNull(request.network());
+        var accountName = trimToNull(request.accountName());
+        var accountNo = request.accountNo() == null ? null : request.accountNo().trim();
+        if (!equalsIgnoreCase(existing.getNetwork(), network)
+                || !Objects.equals(existing.getAccountName(), accountName)
+                || !Objects.equals(existing.getAccountNo(), accountNo)
                 || requirePositiveAmount(request.applyAmount()).compareTo(existing.getApplyAmount()) != 0) {
             throw new BusinessException(ErrorCode.IDEMPOTENCY_CONFLICT, "客户端请求号已被其他提现订单使用");
         }
@@ -508,6 +499,23 @@ public class WithdrawService {
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
     }
 
+    private WithdrawDestination resolveDestination(Long userId, CreateWithdrawOrderRequest request) {
+        if (request.withdrawAddressId() != null) {
+            var address = withdrawAddressService.requireAddress(userId, request.withdrawAddressId());
+            return destination(address);
+        }
+        var network = addressValidator.requireValid(request.network(), request.accountNo());
+        return new WithdrawDestination(null, network, trimToNull(request.accountName()), request.accountNo().trim());
+    }
+
+    private WithdrawDestination destination(UserWithdrawAddress address) {
+        return new WithdrawDestination(address.getId(), address.getNetwork(), trimToNull(address.getAccountName()),
+                address.getAccountNo());
+    }
+
     private record UserIdentity(String userName, String email) {
+    }
+
+    private record WithdrawDestination(Long addressId, String network, String accountName, String accountNo) {
     }
 }

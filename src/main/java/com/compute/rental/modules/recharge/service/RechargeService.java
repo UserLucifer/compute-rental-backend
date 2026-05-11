@@ -106,10 +106,9 @@ public class RechargeService {
                         .orderByAsc(RechargeChannel::getSortNo)
                         .orderByDesc(RechargeChannel::getId));
         var translations = rechargeChannelTranslationMap(channels.stream().map(RechargeChannel::getId).toList(), locale);
-        var globalMinAmount = globalRechargeMinAmount();
         return channels
                 .stream()
-                .map(channel -> toChannelResponse(channel, translations.get(channel.getId()), locale, globalMinAmount))
+                .map(channel -> toChannelResponse(channel, translations.get(channel.getId()), locale))
                 .toList();
     }
 
@@ -167,7 +166,6 @@ public class RechargeService {
 
     @Transactional
     public AdminRechargeChannelResponse createChannel(CreateRechargeChannelRequest request) {
-        validateAmountRange(request.minAmount(), request.maxAmount());
         var now = DateTimeUtils.now();
         var channel = new RechargeChannel();
         applyCreateChannelRequest(channel, request);
@@ -184,7 +182,6 @@ public class RechargeService {
     @Transactional
     public AdminRechargeChannelResponse updateChannel(Long id, UpdateRechargeChannelRequest request) {
         requireChannel(id);
-        validateAmountRange(request.minAmount(), request.maxAmount());
         int updated;
         try {
             updated = rechargeChannelMapper.update(null, new LambdaUpdateWrapper<RechargeChannel>()
@@ -195,9 +192,6 @@ public class RechargeService {
                     .set(RechargeChannel::getDisplayUrl, trimToNull(request.displayUrl()))
                     .set(RechargeChannel::getAccountName, trimToNull(request.accountName()))
                     .set(RechargeChannel::getAccountNo, trimToNull(request.accountNo()))
-                    .set(RechargeChannel::getMinAmount, request.minAmount())
-                    .set(RechargeChannel::getMaxAmount, request.maxAmount())
-                    .set(RechargeChannel::getFeeRate, request.feeRate())
                     .set(RechargeChannel::getSortNo, request.sortNo())
                     .set(RechargeChannel::getStatus, request.status())
                     .set(RechargeChannel::getUpdatedAt, DateTimeUtils.now()));
@@ -233,12 +227,13 @@ public class RechargeService {
             validateCreateOrderIdempotency(existing, request);
             return toOrderResponse(existing);
         }
+        ensureNoSubmittedOrder(userId);
         var channel = requireEnabledChannel(request.channelId());
         var amount = MoneyUtils.requireNonNegative(request.applyAmount());
         if (amount.signum() <= 0) {
             throw new BusinessException(ErrorCode.RECHARGE_AMOUNT_INVALID);
         }
-        var minAmount = effectiveMinAmount(channel);
+        var minAmount = rechargeMinAmount();
         if (amount.compareTo(minAmount) < 0) {
             throw new BusinessException(ErrorCode.RECHARGE_AMOUNT_BELOW_MIN);
         }
@@ -272,6 +267,9 @@ public class RechargeService {
             if (created != null) {
                 validateCreateOrderIdempotency(created, request);
                 return toOrderResponse(created);
+            }
+            if (hasSubmittedOrder(userId)) {
+                throw new BusinessException(ErrorCode.RECHARGE_PENDING_EXISTS);
             }
             throw new BusinessException(ErrorCode.RECHARGE_ORDER_DUPLICATE);
         }
@@ -476,18 +474,7 @@ public class RechargeService {
         return wallet;
     }
 
-    private BigDecimal effectiveMinAmount(RechargeChannel channel) {
-        return effectiveMinAmount(channel, globalRechargeMinAmount());
-    }
-
-    private BigDecimal effectiveMinAmount(RechargeChannel channel, BigDecimal globalMin) {
-        if (channel.getMinAmount() == null) {
-            return globalMin;
-        }
-        return globalMin.max(channel.getMinAmount());
-    }
-
-    private BigDecimal globalRechargeMinAmount() {
+    private BigDecimal rechargeMinAmount() {
         return sysConfigService.getBigDecimal(SysConfigDefaults.RECHARGE_MIN_AMOUNT, new BigDecimal("500"));
     }
 
@@ -497,6 +484,7 @@ public class RechargeService {
         }
         var existing = rechargeOrderMapper.selectOne(new LambdaQueryWrapper<RechargeOrder>()
                 .eq(RechargeOrder::getExternalTxNo, externalTxNo)
+                .in(RechargeOrder::getStatus, RechargeOrderStatus.SUBMITTED.name(), RechargeOrderStatus.APPROVED.name())
                 .last("LIMIT 1"));
         if (existing != null) {
             throw new BusinessException(ErrorCode.RECHARGE_EXTERNAL_TX_NO_EXISTS);
@@ -519,6 +507,19 @@ public class RechargeService {
                 .eq(RechargeOrder::getUserId, userId)
                 .eq(RechargeOrder::getClientRequestId, clientRequestId)
                 .last("LIMIT 1"));
+    }
+
+    private void ensureNoSubmittedOrder(Long userId) {
+        if (hasSubmittedOrder(userId)) {
+            throw new BusinessException(ErrorCode.RECHARGE_PENDING_EXISTS);
+        }
+    }
+
+    private boolean hasSubmittedOrder(Long userId) {
+        var count = rechargeOrderMapper.selectCount(baseOrderQuery()
+                .eq(RechargeOrder::getUserId, userId)
+                .eq(RechargeOrder::getStatus, RechargeOrderStatus.SUBMITTED.name()));
+        return count != null && count > 0;
     }
 
     private void validateCreateOrderIdempotency(RechargeOrder existing, CreateRechargeOrderRequest request) {
@@ -554,14 +555,13 @@ public class RechargeService {
     }
 
     private RechargeChannelResponse toChannelResponse(RechargeChannel channel) {
-        return toChannelResponse(channel, null, LanguageResolver.DEFAULT_LANGUAGE, globalRechargeMinAmount());
+        return toChannelResponse(channel, null, LanguageResolver.DEFAULT_LANGUAGE);
     }
 
     private RechargeChannelResponse toChannelResponse(
             RechargeChannel channel,
             RechargeChannelTranslation translation,
-            String requestedLocale,
-            BigDecimal globalMinAmount
+            String requestedLocale
     ) {
         var channelName = localized(channel.getChannelName(), requestedLocale,
                 translation == null ? null : translation.getChannelName());
@@ -576,9 +576,6 @@ public class RechargeService {
                 channel.getDisplayUrl(),
                 accountName.value(),
                 channel.getAccountNo(),
-                effectiveMinAmount(channel, globalMinAmount),
-                channel.getMaxAmount(),
-                channel.getFeeRate(),
                 channel.getSortNo(),
                 localeFallback ? LanguageResolver.DEFAULT_LANGUAGE : requestedLocale,
                 requestedLocale,
@@ -595,9 +592,6 @@ public class RechargeService {
                 channel.getDisplayUrl(),
                 channel.getAccountName(),
                 channel.getAccountNo(),
-                channel.getMinAmount(),
-                channel.getMaxAmount(),
-                channel.getFeeRate(),
                 channel.getSortNo(),
                 channel.getStatus(),
                 channel.getCreatedAt(),
@@ -612,17 +606,8 @@ public class RechargeService {
         channel.setDisplayUrl(trimToNull(request.displayUrl()));
         channel.setAccountName(trimToNull(request.accountName()));
         channel.setAccountNo(trimToNull(request.accountNo()));
-        channel.setMinAmount(request.minAmount());
-        channel.setMaxAmount(request.maxAmount());
-        channel.setFeeRate(request.feeRate());
         channel.setSortNo(request.sortNo());
         channel.setStatus(request.status());
-    }
-
-    private void validateAmountRange(BigDecimal minAmount, BigDecimal maxAmount) {
-        if (minAmount != null && maxAmount != null && minAmount.compareTo(maxAmount) > 0) {
-            throw new BusinessException(ErrorCode.RECHARGE_AMOUNT_RANGE_INVALID);
-        }
     }
 
     private RechargeOrderResponse toOrderResponse(RechargeOrder order) {

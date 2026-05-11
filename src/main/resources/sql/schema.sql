@@ -133,9 +133,6 @@ CREATE TABLE `recharge_channel` (
   `display_url`  VARCHAR(255) DEFAULT NULL COMMENT '充值链接或二维码URL',
   `account_name` VARCHAR(128) DEFAULT NULL COMMENT '收款名称',
   `account_no`   VARCHAR(255) DEFAULT NULL COMMENT '收款地址',
-  `min_amount`   DECIMAL(20,8) DEFAULT NULL COMMENT '渠道最小充值金额（与全局配置取较大值）',
-  `max_amount`   DECIMAL(20,8) DEFAULT NULL COMMENT '最大充值金额',
-  `fee_rate`     DECIMAL(12,8) NOT NULL DEFAULT 0.00000000 COMMENT '充值手续费率',
   `sort_no`      INT NOT NULL DEFAULT 0 COMMENT '排序号',
   `status`       TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-停用',
   `created_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -173,10 +170,12 @@ CREATE TABLE `recharge_order` (
   `account_no_snapshot`      VARCHAR(255) DEFAULT NULL COMMENT '收款地址快照',
   `apply_amount`             DECIMAL(20,8) NOT NULL COMMENT '用户申报充值金额',
   `actual_amount`            DECIMAL(20,8) DEFAULT NULL COMMENT '审核确认到账金额',
-  `external_tx_no`           VARCHAR(128) DEFAULT NULL COMMENT '外部流水号/交易哈希，唯一约束防重复入账',
+  `external_tx_no`           VARCHAR(128) DEFAULT NULL COMMENT '外部流水号/交易哈希',
+  `active_external_tx_no`    VARCHAR(128) GENERATED ALWAYS AS (CASE WHEN `status` IN ('SUBMITTED', 'APPROVED') THEN `external_tx_no` ELSE NULL END) STORED COMMENT '待审核/已到账交易哈希唯一约束辅助列',
   `payment_proof_url`        VARCHAR(255) DEFAULT NULL COMMENT '支付凭证截图URL',
   `user_remark`              VARCHAR(255) DEFAULT NULL COMMENT '用户备注',
   `status`                   VARCHAR(32) NOT NULL DEFAULT 'SUBMITTED' COMMENT '充值单状态：SUBMITTED-已提交，APPROVED-已到账，REJECTED-已驳回，CANCELED-已取消',
+  `submitted_user_id`        BIGINT GENERATED ALWAYS AS (CASE WHEN `status` = 'SUBMITTED' THEN `user_id` ELSE NULL END) STORED COMMENT '待审核充值唯一约束辅助列',
   `reviewed_by`              BIGINT DEFAULT NULL COMMENT '审核管理员ID',
   `reviewed_at`              DATETIME DEFAULT NULL COMMENT '审核时间',
   `review_remark`            VARCHAR(255) DEFAULT NULL COMMENT '审核备注',
@@ -187,7 +186,8 @@ CREATE TABLE `recharge_order` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_recharge_no` (`recharge_no`),
   UNIQUE KEY `uk_user_client_request` (`user_id`, `client_request_id`),
-  UNIQUE KEY `uk_external_tx_no` (`external_tx_no`) COMMENT 'NULL值不受唯一约束影响，只防非空哈希重复',
+  UNIQUE KEY `uk_recharge_active_external_tx_no` (`active_external_tx_no`) COMMENT '待审核/已到账充值单交易哈希不可重复',
+  UNIQUE KEY `uk_recharge_submitted_user` (`submitted_user_id`) COMMENT '同一用户只允许存在一笔待审核充值',
   KEY `idx_user_id` (`user_id`),
   KEY `idx_wallet_id` (`wallet_id`),
   KEY `idx_channel_id` (`channel_id`),
@@ -206,6 +206,7 @@ CREATE TABLE `withdraw_order` (
   `client_request_id` VARCHAR(64) DEFAULT NULL COMMENT '客户端请求幂等号，同一用户内唯一，防重复创建提现单',
   `user_id`         BIGINT NOT NULL COMMENT '用户ID',
   `wallet_id`       BIGINT NOT NULL COMMENT '钱包ID',
+  `withdraw_address_id` BIGINT DEFAULT NULL COMMENT '用户提现地址簿ID快照',
   `currency`        VARCHAR(10) NOT NULL DEFAULT 'USDT' COMMENT '币种，固定USDT',
   `withdraw_method` VARCHAR(32) NOT NULL DEFAULT 'USDT' COMMENT '提现方式，第一版固定USDT',
   `network`         VARCHAR(64) DEFAULT NULL COMMENT '链网络，如 TRC20/ERC20/BEP20',
@@ -237,6 +238,25 @@ CREATE TABLE `withdraw_order` (
   CONSTRAINT `fk_withdraw_order_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`),
   CONSTRAINT `fk_withdraw_order_wallet` FOREIGN KEY (`wallet_id`) REFERENCES `user_wallet` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='提现申请单';
+
+CREATE TABLE `user_withdraw_address` (
+  `id`              BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id`         BIGINT NOT NULL COMMENT '用户ID',
+  `network`         VARCHAR(64) NOT NULL COMMENT '链网络，如 TRC20/ERC20/BEP20',
+  `account_name`    VARCHAR(64) DEFAULT NULL COMMENT '收款账户名称，可为空',
+  `account_no`      VARCHAR(255) NOT NULL COMMENT '提现收款地址',
+  `label`           VARCHAR(64) DEFAULT NULL COMMENT '用户自定义标签',
+  `is_default`      TINYINT NOT NULL DEFAULT 0 COMMENT '是否默认地址：1-是，0-否',
+  `default_user_id` BIGINT GENERATED ALWAYS AS (CASE WHEN `is_default` = 1 THEN `user_id` ELSE NULL END) STORED COMMENT '默认地址唯一约束辅助列',
+  `status`          TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用，0-停用',
+  `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_withdraw_address` (`user_id`, `network`, `account_no`),
+  UNIQUE KEY `uk_user_default_withdraw_address` (`default_user_id`),
+  KEY `idx_user_status_default` (`user_id`, `status`, `is_default`),
+  CONSTRAINT `fk_user_withdraw_address_user` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户提现地址簿';
 
 CREATE TABLE `region` (
   `id`          BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

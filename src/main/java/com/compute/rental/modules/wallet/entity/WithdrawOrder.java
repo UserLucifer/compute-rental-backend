@@ -32,6 +32,9 @@ public class WithdrawOrder {
     @TableField("wallet_id")
     private Long walletId;
 
+    @TableField("withdraw_address_id")
+    private Long withdrawAddressId;
+
     @TableField("currency")
     private String currency;
 

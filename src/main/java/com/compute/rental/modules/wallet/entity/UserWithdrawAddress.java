@@ -4,29 +4,23 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
-import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@TableName("recharge_channel")
-public class RechargeChannel {
+@TableName("user_withdraw_address")
+public class UserWithdrawAddress {
 
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
-    @TableField("channel_code")
-    private String channelCode;
-
-    @TableField("channel_name")
-    private String channelName;
+    @TableField("user_id")
+    private Long userId;
 
     @TableField("network")
     private String network;
-
-    @TableField("display_url")
-    private String displayUrl;
 
     @TableField("account_name")
     private String accountName;
@@ -34,8 +28,11 @@ public class RechargeChannel {
     @TableField("account_no")
     private String accountNo;
 
-    @TableField("sort_no")
-    private Integer sortNo;
+    @TableField("label")
+    private String label;
+
+    @TableField("is_default")
+    private Integer isDefault;
 
     @TableField("status")
     private Integer status;
@@ -45,5 +42,4 @@ public class RechargeChannel {
 
     @TableField("updated_at")
     private LocalDateTime updatedAt;
-
 }

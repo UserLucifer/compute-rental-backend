@@ -111,12 +111,11 @@ public enum ErrorCode {
     RECHARGE_CHANNEL_NOT_FOUND(60011, "充值渠道不存在", HttpStatus.NOT_FOUND),
     RECHARGE_EXTERNAL_TX_NO_EXISTS(60012, "外部交易号重复", HttpStatus.CONFLICT),
     RECHARGE_ORDER_NOT_FOUND(60013, "充值订单不存在", HttpStatus.NOT_FOUND),
-    RECHARGE_AMOUNT_RANGE_INVALID(60014, "最小充值金额不能大于最大充值金额", HttpStatus.BAD_REQUEST),
     RECHARGE_ORDER_PROCESSING(60015, "充值订单正在处理，请稍后重试", HttpStatus.CONFLICT),
+    RECHARGE_PENDING_EXISTS(60016, "已有待审核充值，请等待处理或取消后重试。", HttpStatus.CONFLICT),
 
     WITHDRAW_ADDRESS_INVALID(70001, "提现地址无效", HttpStatus.BAD_REQUEST),
     WITHDRAW_AMOUNT_BELOW_MIN(70002, "提现金额低于最低金额", HttpStatus.BAD_REQUEST),
-    WITHDRAW_DAILY_LIMIT_EXCEEDED(70003, "已超过每日提现限额", HttpStatus.BAD_REQUEST),
     WITHDRAW_ORDER_NOT_CANCELABLE(70004, "仅待处理提现订单可取消", HttpStatus.BAD_REQUEST),
     WITHDRAW_ORDER_NOT_APPROVABLE(70005, "仅待处理提现订单可审核通过", HttpStatus.BAD_REQUEST),
     WITHDRAW_ORDER_NOT_REJECTABLE(70006, "仅待处理或已审核提现订单可驳回", HttpStatus.BAD_REQUEST),
@@ -124,6 +123,8 @@ public enum ErrorCode {
     WITHDRAW_ORDER_STATUS_CHANGED(70008, "提现订单状态已变化", HttpStatus.CONFLICT),
     WITHDRAW_ORDER_NOT_FOUND(70009, "提现订单不存在", HttpStatus.NOT_FOUND),
     WITHDRAW_ORDER_PROCESSING(70010, "提现订单正在处理，请稍后重试", HttpStatus.CONFLICT),
+    WITHDRAW_ADDRESS_NOT_FOUND(70011, "提现地址不存在或不可用", HttpStatus.NOT_FOUND),
+    WITHDRAW_ADDRESS_DUPLICATE(70012, "提现地址已存在", HttpStatus.CONFLICT),
 
     ADMIN_BAD_CREDENTIALS(80001, "用户名或密码错误", HttpStatus.UNAUTHORIZED),
     ADMIN_DISABLED(80002, "管理员账号已禁用", HttpStatus.FORBIDDEN),

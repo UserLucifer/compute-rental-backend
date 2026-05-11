@@ -1,6 +1,5 @@
 package com.compute.rental.modules.recharge.dto;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record AdminRechargeChannelResponse(
@@ -11,9 +10,6 @@ public record AdminRechargeChannelResponse(
         String displayUrl,
         String accountName,
         String accountNo,
-        BigDecimal minAmount,
-        BigDecimal maxAmount,
-        BigDecimal feeRate,
         Integer sortNo,
         Integer status,
         LocalDateTime createdAt,
